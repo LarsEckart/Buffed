@@ -6,11 +6,19 @@ local speed = 0
 function GetUnitSpeed(unit) assert(unit == "player"); return speed end
 local mutations, scans = 0, 0
 local function recordScan()
-    assert(not combat and not dead and not mounted, "unnecessary scan while suppressed")
+    assert(not combat and not dead and not mounted, "unnecessary or restricted scan while suppressed")
     scans = scans + 1
 end
-local function protectedMutation()
-    assert(not combat, "secure frame mutated in combat")
+-- Conservative protection model: reject mutations through secure parents or
+-- relative anchors too.
+local function protected(frame)
+    if not frame or type(frame) ~= "table" then return false end
+    return frame.secure or protected(frame.parent)
+        or (frame.point and protected(frame.point[2])) or false
+end
+local function protectedMutation(frame)
+    if not protected(frame) then return end
+    assert(not combat, "secure frame/dependent mutated in combat")
     mutations = mutations + 1
 end
 local methods = {}
@@ -19,23 +27,38 @@ for _, name in ipairs({ "SetSize", "SetMovable", "SetClampedToScreen", "Register
     "RegisterForClicks", "StartMoving", "StopMovingOrSizing", "SetText", "SetShown",
     "SetFrameStrata", "SetColorTexture", "SetMultiLine", "SetFontObject", "SetAutoFocus",
     "SetScrollChild", "SetFocus", "ClearFocus", "HighlightText" }) do
-    methods[name] = function(self, ...) self[name .. "Args"] = { ... } end
+    methods[name] = function(self, ...)
+        protectedMutation(self)
+        self[name .. "Args"] = { ... }
+    end
 end
 function methods:SetScript(name, fn) self[name] = fn end
 function methods:RegisterEvent(name)
     self.events = self.events or {}
     self.events[name] = true
 end
-function methods:Show() protectedMutation(); self.shown = true end
-function methods:Hide() protectedMutation(); self.shown = false end
-function methods:SetAttribute(key, value) protectedMutation(); self[key] = value end
-function methods:SetPoint(...) protectedMutation(); self.point = { ... } end
-function methods:ClearAllPoints() protectedMutation() end
-function methods:EnableMouse() protectedMutation() end
-function methods:CreateTexture() return setmetatable({}, { __index = methods }) end
+function methods:Show()
+    protectedMutation(self)
+    self.shown = true
+end
+function methods:Hide()
+    protectedMutation(self)
+    self.shown = false
+end
+function methods:IsShown() return self.shown end
+function methods:IsVisible() return self.shown end
+function methods:GetCenter() return 400, 300 end
+function methods:SetAttribute(key, value) protectedMutation(self); self[key] = value end
+function methods:SetPoint(...) protectedMutation(self); self.point = { ... } end
+function methods:GetPoint() return (unpack or table.unpack)(self.point) end
+function methods:ClearAllPoints() protectedMutation(self); self.point = nil end
+function methods:EnableMouse() protectedMutation(self) end
+function methods:CreateTexture() return setmetatable({ parent = self }, { __index = methods }) end
 methods.CreateFontString = methods.CreateTexture
-function CreateFrame(_, name)
-    local frame = setmetatable({}, { __index = methods })
+function CreateFrame(_, name, parent, template)
+    assert(not combat, "UI frames must be pre-created before combat")
+    local frame = setmetatable({ parent = parent,
+        secure = template and template:find("Secure", 1, true) ~= nil }, { __index = methods })
     frames[#frames + 1] = frame
     if name then _G[name] = frame end
     return frame
@@ -89,6 +112,12 @@ assert(#frames == 1 and scans == 0, "world entry in combat must defer initializa
 combat = false
 event("PLAYER_REGEN_ENABLED")
 assert(scans > 0, "deferred initialization should run after combat")
+assert(not BuffedCombatShadowguard, "do not create a combat reminder dependent on secret auras")
+BuffedAnchor:SetPoint("CENTER", UIParent, "CENTER", 80, -90)
+BuffedAnchor.OnDragStop(BuffedAnchor)
+assert(BuffedDB.position.x == 80 and BuffedDB.position.y == -90)
+SlashCmdList.BUFFED("reset")
+assert(BuffedAnchor.point[4] == 0 and BuffedAnchor.point[5] == -160)
 -- Use semantic aliases so test assertions do not depend on the button order.
 local fortitude, fire, guard, food, intellect
 for _, frame in ipairs(frames) do
@@ -151,6 +180,42 @@ assert(guard.shown and guard.unit == "player" and BuffedDB.enabled.shadowguard)
 active = { "Shadowguard" }
 event("UNIT_AURA", "player")
 assert(not guard.shown)
+combat = true
+before = mutations
+local scansBeforeCombat = scans
+local readBuffBeforeCombat = C_UnitAuras.GetBuffDataByIndex
+C_UnitAuras.GetBuffDataByIndex = function() error("secret aura access forbidden in combat") end
+UnitBuff = function() error("legacy aura access forbidden in combat") end
+active = {}
+for _, name in ipairs({ "PLAYER_REGEN_DISABLED", "UNIT_AURA", "PLAYER_STARTED_MOVING",
+    "PLAYER_STOPPED_MOVING", "BAG_UPDATE_DELAYED", "SPELLS_CHANGED" }) do event(name, "player") end
+local frameCountInCombat = #frames
+SlashCmdList.BUFFED("status")
+assert(#frames == frameCountInCombat, "first status use in combat must not create UI frames")
+local combatStatusBox, combatStatusPanel
+for _, frame in ipairs(frames) do
+    if frame.HighlightTextArgs then combatStatusBox = frame end
+    if frame.SetFrameStrataArgs then combatStatusPanel = frame end
+end
+assert(combatStatusPanel.shown and combatStatusBox.SetFocusArgs)
+assert(combatStatusBox.SetTextArgs[1]:find("Combat: true", 1, true))
+assert(combatStatusBox.SetTextArgs[1]:find("cached, not live", 1, true))
+assert(combatStatusBox.SetTextArgs[1]:find("Cached player buffs", 1, true))
+assert(combatStatusBox.SetTextArgs[1]:find("Shadowguard: on, learned, active", 1, true),
+    "combat status must preserve pre-combat auras, not infer current state")
+combatStatusBox.OnEscapePressed()
+assert(not combatStatusPanel.shown)
+assert(scans == scansBeforeCombat, "combat events and status must perform no live scans")
+assert(mutations == before, "combat status must not mutate secure frames")
+C_UnitAuras.GetBuffDataByIndex = readBuffBeforeCombat
+UnitBuff = nil
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(guard.shown, "normal clickable reminder resumes with fresh auras after combat")
+SlashCmdList.BUFFED("status")
+assert(combatStatusBox.SetTextArgs[1]:find("Shadowguard: on, learned, missing", 1, true))
+assert(not combatStatusBox.SetTextArgs[1]:find("cached, not live", 1, true))
+combatStatusBox.OnEscapePressed()
 active = {}
 event("UNIT_AURA", "player")
 assert(guard.shown, "depleted Shadowguard should reappear")
@@ -335,4 +400,49 @@ SlashCmdList.BUFFED("status")
 assert(#frames == frameCount and statusPanel.shown, "status window should be reused")
 statusBox.OnEscapePressed()
 assert(not statusPanel.shown)
+for _, message in ipairs(messages) do
+    assert(not message:find("Runtime error", 1, true), message)
+end
+-- A real client failure must not abort chat submission or require diagnostics
+-- to work in combat. Retain the first failure and report it once combat ends.
+C_SpellBook.GetNumSpellBookSkillLines = nil
+C_SpellBook.GetSpellBookSkillLineInfo = nil
+C_SpellBook.GetSpellBookItemName = nil
+learned.Shadowguard = true
+active = {}
+event("SPELLS_CHANGED")
+statusBox.SetText = function() error("simulated status display failure") end
+combat = true
+event("PLAYER_REGEN_DISABLED")
+assert(pcall(SlashCmdList.BUFFED, "status"), "failed status must not escape the slash handler")
+assert(not messages[#messages]:find("Runtime error", 1, true), "combat error report must be deferred")
+statusBox.SetText = nil
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(messages[#messages]:find("/buffed status", 1, true))
+assert(messages[#messages]:find("simulated status display failure", 1, true))
+local reportCount = #messages
+event("PLAYER_REGEN_ENABLED")
+assert(#messages == reportCount, "deferred error must only print once")
+SlashCmdList.BUFFED("status")
+assert(statusBox.SetTextArgs[1]:find("Last runtime error:", 1, true))
+assert(statusBox.SetTextArgs[1]:find("simulated status display failure", 1, true))
+-- Reload while mounted, then enter combat before any aura scan: do not
+-- manufacture 'missing' or 'unlearned' results from an absent snapshot.
+local newEventsIndex = #frames + 1
+mounted = true
+assert(loadfile("Buffed.lua"))("Buffed")
+local newEvents = frames[newEventsIndex]
+newEvents.OnEvent(newEvents, "PLAYER_ENTERING_WORLD")
+mounted, combat = false, true
+SlashCmdList.BUFFED("status")
+local emptySnapshotBox
+for i = newEventsIndex, #frames do
+    if frames[i].HighlightTextArgs then emptySnapshotBox = frames[i] end
+end
+assert(emptySnapshotBox)
+assert(emptySnapshotBox.SetTextArgs[1]:find("No out-of-combat aura snapshot available.", 1, true))
+assert(emptySnapshotBox.SetTextArgs[1]:find("aura unknown", 1, true))
+assert(emptySnapshotBox.SetTextArgs[1]:find("availability/learned state unknown", 1, true))
+combat = false
 print("Buffed mock smoke tests passed")

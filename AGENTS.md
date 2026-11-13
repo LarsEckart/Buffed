@@ -83,6 +83,52 @@ or ambiguous, ask for an in-game tooltip/API result instead of guessing.
 - Gameplay database lookups do not prove client API compatibility. Test
   Forever's actual APIs in-game; do not assume Classic/Retail API behavior.
 
+## Combat API limits and feasibility checks
+
+**Check feasibility before implementing a feature, and push back explicitly when
+it depends on restricted APIs.** Explain the restriction and offer supported
+alternatives rather than promising a feature and repeatedly trying speculative
+workarounds. If feasibility is unknown, say so and request a small in-game API
+test before building the feature. Do not claim that every buff is inaccessible
+just because a full aura scan failed.
+
+### Confirmed in this Forever client
+
+- In-combat aura enumeration through `C_UnitAuras.GetBuffDataByIndex` triggered
+  a client error reporting that secret auras cannot be accessed while tainted
+  by Buffed. It broke both the attempted Shadowguard combat reminder and
+  `/buffed status`; a movement event also triggered the failing refresh path.
+- Buffed therefore does not call aura-reading APIs or inspect `UNIT_AURA`
+  payloads during combat. It refreshes live data after combat instead.
+- `/buffed status` works during combat using cached out-of-combat aura states,
+  names/IDs, learned spells, and item availability. The user confirmed the
+  window opens with this implementation. These values must be labelled cached,
+  not live, and must not drive claims about current combat buff state.
+- Secure casting buttons, their attributes, visibility, and layout must not be
+  changed by addon Lua in combat. The bar uses a preconfigured secure visibility
+  state driver. A non-clickable indicator does not solve restricted aura access.
+- Catching an error with `pcall` does not grant API access. Do not attempt to
+  bypass secret-value or taint restrictions, reconstruct hidden state, or treat
+  a spell ID instead of a name as a way around these restrictions.
+
+### Still unverified
+
+- The failed full scan does **not** establish that Shadowguard itself, or every
+  other individual aura, is secret. A targeted lookup for a non-secret aura may
+  be possible, but its API availability and behavior must be verified in Forever
+  before proposing it as a working solution. There is currently no verified
+  live "show Shadowguard only when missing" combat implementation here.
+- Always-visible, preconfigured combat buttons are a possible alternative to
+  discuss with the user, not permission to add them without being asked. They
+  must not depend on reading restricted aura state.
+
+Blizzard's generated aura API documentation marks `GetBuffDataByIndex` with
+`RequiresUnitAuraAccess` and `SecretWhenUnitAuraRestricted`:
+https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitAuraDocumentation.lua
+This is a community mirror of current Retail-generated documentation, **not**
+Forever-specific compatibility evidence. Use it as context; the actual Forever
+client error and in-game tests determine what this addon can safely do.
+
 ## Validation and workflow
 
 Runtime files are `Buffed.toc` and `Buffed.lua`. Mock tests are in

@@ -20,9 +20,28 @@ local anchor, initialized
 local enteredWorld = false
 local moving = false
 local buttons = {}
+local availability = {}
+local cachedActive, cachedDetails = {}, {}
+local hasAuraSnapshot = false
+local CreateStatusWindow
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cffaad8ffBuffed:|r " .. message)
+end
+
+local lastRuntimeError, pendingRuntimeError
+local function RunSafely(context, callback, ...)
+    local ok, err = pcall(callback, ...)
+    if not ok then
+        if not pendingRuntimeError then
+            lastRuntimeError = context .. ": " .. tostring(err)
+        end
+        pendingRuntimeError = true
+    end
+    if pendingRuntimeError and not InCombatLockdown() then
+        Print("Runtime error (please share): " .. lastRuntimeError)
+        pendingRuntimeError = false
+    end
 end
 
 local function SpellTexture(name)
@@ -76,6 +95,9 @@ local function Known(name)
 end
 
 local function ActiveBuffs()
+    -- Forever rejects aura access while secret in combat. Never call either
+    -- aura API then; diagnostics may only use the last out-of-combat snapshot.
+    if InCombatLockdown() then return cachedActive, cachedDetails end
     local active, details = {}, {}
     for i = 1, 255 do
         local name, spellID
@@ -92,6 +114,8 @@ local function ActiveBuffs()
         if spellID then active[spellID] = true end
         details[#details + 1] = name .. " (spell ID: " .. tostring(spellID or "unavailable") .. ")"
     end
+    cachedActive, cachedDetails = active, details
+    hasAuraSnapshot = true
     return active, details
 end
 
@@ -218,7 +242,8 @@ local function Refresh()
         local item = buff.item and FindConsumable(buff)
         local available
         if buff.item then available = item ~= nil
-        else available = Known(buff.name) end
+        else available = not not Known(buff.name) end
+        availability[buff.key] = available
         if buff.item then
             button:SetAttribute("item", item and ("item:" .. item.id) or nil)
             button.displayName = item and item.name or buff.name
@@ -262,6 +287,7 @@ local function Initialize()
         self:StopMovingOrSizing()
         local point, _, relativePoint, x, y = self:GetPoint()
         BuffedDB.position = { point = point, relativePoint = relativePoint, x = x, y = y }
+        RestorePosition()
     end)
     anchor.label = anchor:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     anchor.label:SetPoint("LEFT", 0, 0)
@@ -299,12 +325,13 @@ local function Initialize()
         buttons[i] = button
     end
     RegisterStateDriver(anchor, "visibility", "[combat] hide; show")
+    CreateStatusWindow()
     initialized = true
     Refresh()
 end
 
 local statusWindow, statusText
-local function ShowStatus(lines)
+CreateStatusWindow = function()
     if not statusWindow then
         statusWindow = CreateFrame("Frame", nil, UIParent)
         statusWindow:SetSize(600, 360)
@@ -330,7 +357,11 @@ local function ShowStatus(lines)
         statusText:SetScript("OnEscapePressed", function() statusWindow:Hide() end)
         scroll:SetScrollChild(statusText)
         statusWindow:SetScript("OnHide", function() statusText:ClearFocus() end)
+        statusWindow:Hide()
     end
+end
+
+local function ShowStatus(lines)
     statusText:SetText(table.concat(lines, "\n"))
     statusWindow:Show()
     statusText:SetFocus()
@@ -338,7 +369,7 @@ local function ShowStatus(lines)
 end
 
 SLASH_BUFFED1 = "/buffed"
-SlashCmdList.BUFFED = function(message)
+local function HandleCommand(message)
     if not initialized then
         Print("Not ready yet. Leave combat and try again.")
         return
@@ -356,17 +387,34 @@ SlashCmdList.BUFFED = function(message)
             lines[#lines + 1] = line
             Print(line)
         end
+        if lastRuntimeError then AddLine("Last runtime error: " .. lastRuntimeError) end
         AddLine("Combat: " .. tostring(InCombatLockdown()) .. ", mounted: " .. tostring(IsMounted())
             .. ", dead/ghost: " .. tostring(UnitIsDeadOrGhost("player")) .. ", moving: " .. tostring(moving))
-        for _, buff in ipairs(buffs) do
-            AddLine(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
-                .. (buff.item and (FindConsumable(buff) and ", usable item in bags" or ", no supported usable item")
-                    or (Known(buff.name) and ", learned" or ", not learned"))
-                .. (HasBuff(active, buff) and ", active" or ", missing"))
+        if InCombatLockdown() then
+            AddLine("Combat aura access blocked by client; conditional combat reminders disabled.")
+            AddLine("Aura states, item availability and learned spells below are cached, not live.")
+            if not hasAuraSnapshot then AddLine("No out-of-combat aura snapshot available.") end
         end
-        AddLine("Player buffs via " .. (C_UnitAuras and C_UnitAuras.GetBuffDataByIndex
+        for _, buff in ipairs(buffs) do
+            local available = availability[buff.key]
+            if not InCombatLockdown() then
+                if buff.item then available = FindConsumable(buff) ~= nil
+                else available = not not Known(buff.name) end
+                availability[buff.key] = available
+            end
+            AddLine(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
+                .. (available == nil and ", availability/learned state unknown"
+                    or (buff.item and (available and ", usable item in bags" or ", no supported usable item")
+                        or (available and ", learned" or ", not learned")))
+                .. (not hasAuraSnapshot and ", aura unknown"
+                    or (HasBuff(active, buff) and ", active" or ", missing")))
+        end
+        AddLine((InCombatLockdown() and "Cached player buffs via " or "Player buffs via ")
+            .. (C_UnitAuras and C_UnitAuras.GetBuffDataByIndex
             and "C_UnitAuras.GetBuffDataByIndex" or "UnitBuff") .. ":")
-        if #details == 0 then AddLine("(none returned)") end
+        if #details == 0 then
+            AddLine(InCombatLockdown() and "(none in cached snapshot)" or "(none returned)")
+        end
         for _, detail in ipairs(details) do AddLine(detail) end
         ShowStatus(lines)
         return
@@ -395,8 +443,13 @@ SlashCmdList.BUFFED = function(message)
     Refresh()
 end
 
+SlashCmdList.BUFFED = function(message)
+    RunSafely("/buffed " .. message, HandleCommand, message)
+end
+
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
+events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("UNIT_AURA")
 events:RegisterEvent("SPELLS_CHANGED")
 events:RegisterEvent("BAG_UPDATE_DELAYED")
@@ -407,7 +460,7 @@ events:RegisterEvent("PLAYER_UNGHOST")
 events:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 events:RegisterEvent("PLAYER_STARTED_MOVING")
 events:RegisterEvent("PLAYER_STOPPED_MOVING")
-events:SetScript("OnEvent", function(_, event, unit)
+local function HandleEvent(_, event, unit)
     if event == "PLAYER_ENTERING_WORLD" then
         enteredWorld = true
         moving = GetUnitSpeed("player") > 0
@@ -415,9 +468,17 @@ events:SetScript("OnEvent", function(_, event, unit)
     -- Spell/bag/aura events can arrive before the player enters the world.
     -- If world entry occurs in combat, initialization waits until combat ends.
     if not enteredWorld then return end
-    if event == "UNIT_AURA" and unit ~= "player" then return end
+    if event == "UNIT_AURA" then
+        -- Avoid inspecting restricted event payloads as well as the aura APIs.
+        if InCombatLockdown() then return end
+        if unit ~= "player" then return end
+    end
     -- Track transitions even in combat, without touching secure frames there.
     if event == "PLAYER_STARTED_MOVING" then moving = true
     elseif event == "PLAYER_STOPPED_MOVING" then moving = false end
     if not initialized then Initialize() else Refresh() end
+end
+
+events:SetScript("OnEvent", function(self, event, unit)
+    RunSafely(event, HandleEvent, self, event, unit)
 end)

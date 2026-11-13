@@ -26,9 +26,13 @@ Original implementation inspired by BuffCheck; no external libraries required.
   Intellect is missing. Click to use it on yourself. Supports classic ranks
   I–IV (required levels 5/20/35/50) and picks the highest usable rank;
   Arcane Intellect/Brilliance also hide it.
-- Hidden during combat, while dead/ghost, or while mounted. The food icon also
-  hides while moving and returns when you stop; other icons are unaffected.
-  Movement updates are event-driven, with no polling.
+- The clickable bar is hidden during combat, while dead/ghost, or while mounted.
+  No conditional Shadowguard combat reminder: the Forever client has reported
+  secret/tainted aura-access errors during combat. Buffed does not read aura
+  APIs or inspect `UNIT_AURA` payloads in combat, and never modifies secure
+  buttons or their layout there. Reminders refresh after combat.
+  The food icon also hides while moving and returns when you stop; other icons
+  are unaffected. Movement updates are event-driven, with no polling.
 - Position and enabled reminders are saved per character.
 - Initializes on world entry, not login or earlier bag/spell events. If world
   entry occurs in combat, initialization waits until combat ends. Normal updates
@@ -51,11 +55,32 @@ Missing learned buffs appear near the center, slightly below your character.
 - `/buffed reset` — reset position
 - `/buffed status` — show enabled/learned status and the client's active buff
   names/IDs (including the aura API used) in chat and a copy window.
+  The window is pre-created out of combat, so first use during combat does not
+  create frames. In combat, aura states/names/IDs, bag availability, and learned
+  spells come exclusively from the last out-of-combat scans and are explicitly
+  labelled **cached, not live**. Buffs changing in combat will not change that
+  snapshot. If no aura snapshot exists yet, status says so instead of claiming
+  buffs are missing. Live scans resume after combat.
   Text is selected automatically: press **Ctrl+C** to copy, then **Escape** to
   close. WoW addons cannot write directly to the system clipboard.
+- Runtime errors from event/command handlers are caught so a failed status
+  command does not abort chat submission. The first pending error is printed
+  to chat after combat (immediately if already out of combat) and retained in
+  subsequent `/buffed status` output until reload. If combat behavior fails,
+  leave combat and share the `Runtime error (please share)` message; combat
+  diagnostics do not need to open successfully.
 - `/buffed fortitude`, `fire`, `shadowguard`, `food`, or `intellect` — toggle that reminder
 
 ### In-game smoke test
+
+- Enter combat with Shadowguard active, then spend its charges. The bar should
+  remain hidden. Run `/buffed status` for the first time during that fight:
+  the copy window should open and identify the aura information as cached,
+  still listing the pre-combat buff. Leave combat: the normal Shadowguard
+  reminder should return, and status should reflect the current aura state.
+  Repeat with movement and other aura/bag/spell events during combat; there
+  should be no secret-aura errors. Mock tests do not verify Forever's actual
+  frame protection or aura APIs.
 
 1. On a priest, remove Inner Fire: its icon should appear. Click it: the buff
    should be applied to yourself even with another unit targeted, and the icon disappear.
@@ -71,6 +96,14 @@ Missing learned buffs appear near the center, slightly below your character.
 7. Carry a usable Scroll of Intellect without an Intellect buff: its icon should
    appear. Click it with another unit targeted: it should buff you and disappear.
    Removing the last scroll from your bags should also hide the icon.
+
+API reference: Blizzard's generated `UnitAuraDocumentation.lua` marks
+`GetBuffDataByIndex` with `RequiresUnitAuraAccess` and
+`SecretWhenUnitAuraRestricted`:
+https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitAuraDocumentation.lua
+This is a community mirror of Blizzard's current Retail-generated documentation,
+not Forever-specific compatibility evidence. The user's Forever client error
+is the evidence for conservatively avoiding combat aura access here.
 
 Automated tests use mocked WoW APIs, not the actual client. In-game validation is
 still required, particularly Forever's spellbook and secure-click behavior.
