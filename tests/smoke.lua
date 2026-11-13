@@ -4,7 +4,11 @@ local combat, dead, mounted = false, false, false
 local bags, level = {}, 22
 local speed = 0
 function GetUnitSpeed(unit) assert(unit == "player"); return speed end
-local mutations = 0
+local mutations, scans = 0, 0
+local function recordScan()
+    assert(not combat and not dead and not mounted, "unnecessary scan while suppressed")
+    scans = scans + 1
+end
 local function protectedMutation()
     assert(not combat, "secure frame mutated in combat")
     mutations = mutations + 1
@@ -12,10 +16,16 @@ end
 local methods = {}
 for _, name in ipairs({ "SetSize", "SetMovable", "SetClampedToScreen", "RegisterForDrag",
     "RegisterEvent", "SetTexture", "SetAllPoints", "SetHighlightTexture",
-    "RegisterForClicks", "StartMoving", "StopMovingOrSizing", "SetText", "SetShown" }) do
+    "RegisterForClicks", "StartMoving", "StopMovingOrSizing", "SetText", "SetShown",
+    "SetFrameStrata", "SetColorTexture", "SetMultiLine", "SetFontObject", "SetAutoFocus",
+    "SetScrollChild", "SetFocus", "ClearFocus", "HighlightText" }) do
     methods[name] = function(self, ...) self[name .. "Args"] = { ... } end
 end
 function methods:SetScript(name, fn) self[name] = fn end
+function methods:RegisterEvent(name)
+    self.events = self.events or {}
+    self.events[name] = true
+end
 function methods:Show() protectedMutation(); self.shown = true end
 function methods:Hide() protectedMutation(); self.shown = false end
 function methods:SetAttribute(key, value) protectedMutation(); self[key] = value end
@@ -43,7 +53,7 @@ function RegisterStateDriver(_, state, condition)
     assert(state == "visibility" and condition == "[combat] hide; show")
 end
 C_Container = {
-    GetContainerNumSlots = function(bag) return #(bags[bag] or {}) end,
+    GetContainerNumSlots = function(bag) recordScan(); return #(bags[bag] or {}) end,
     GetContainerItemID = function(bag, slot) return bags[bag][slot] end,
 }
 C_Item = { GetItemIconByID = function(id) return id + 100000 end }
@@ -51,6 +61,7 @@ local spellIDs = { ["Power Word: Fortitude"] = 1244, ["Inner Fire"] = 588, ["Sha
 Enum = { SpellBookSpellBank = { Player = 0 } }
 C_Spell = { GetSpellInfo = function(name) return { iconID = 123, spellID = spellIDs[name] } end }
 C_SpellBook = { IsSpellInSpellBook = function(id, bank, overrides)
+    recordScan()
     assert(type(id) == "number", "spellbook lookup requires an ID, not a name")
     assert(bank == 0 and overrides == true, "player spell bank must be explicit")
     for name, spellID in pairs(spellIDs) do
@@ -58,13 +69,26 @@ C_SpellBook = { IsSpellInSpellBook = function(id, bank, overrides)
     end
 end }
 C_UnitAuras = { GetBuffDataByIndex = function(_, index)
-    return active[index] and { name = active[index] }
+    recordScan()
+    local aura = active[index]
+    return type(aura) == "table" and aura or (aura and { name = aura })
 end }
 
 assert(loadfile("Buffed.lua"))("Buffed")
 local function event(name, unit) frames[1].OnEvent(frames[1], name, unit) end
 learned["Power Word: Fortitude"], learned["Inner Fire"] = true, true
-event("PLAYER_LOGIN")
+assert(not frames[1].events.PLAYER_LOGIN, "login event should not be registered")
+for _, name in ipairs({ "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "UNIT_AURA", "PLAYER_REGEN_ENABLED" }) do
+    event(name, "player")
+end
+assert(#frames == 1 and mutations == 0 and scans == 0 and BuffedDB == nil,
+    "events before world entry must not initialize or scan")
+combat = true
+event("PLAYER_ENTERING_WORLD")
+assert(#frames == 1 and scans == 0, "world entry in combat must defer initialization")
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(scans > 0, "deferred initialization should run after combat")
 -- Use semantic aliases so test assertions do not depend on the button order.
 local fortitude, fire, guard, food, intellect
 for _, frame in ipairs(frames) do
@@ -107,9 +131,15 @@ event("PLAYER_REGEN_ENABLED")
 mounted = true
 event("PLAYER_MOUNT_DISPLAY_CHANGED")
 assert(not fortitude.shown)
+local previousScans = scans
+for _, name in ipairs({ "BAG_UPDATE_DELAYED", "SPELLS_CHANGED", "UNIT_AURA" }) do event(name, "player") end
+assert(scans == previousScans, "mounted events should skip data scans")
 mounted, dead = false, true
 event("PLAYER_DEAD")
 assert(not fortitude.shown)
+previousScans = scans
+for _, name in ipairs({ "BAG_UPDATE_DELAYED", "SPELLS_CHANGED", "UNIT_AURA" }) do event(name, "player") end
+assert(scans == previousScans, "dead events should skip data scans")
 dead = false
 event("PLAYER_UNGHOST")
 assert(fortitude.shown)
@@ -166,6 +196,28 @@ assert(food.shown, "non-XP Well Fed must not hide the XP reminder")
 active = { "Well Fed XP Boost" }
 event("UNIT_AURA", "player")
 assert(not food.shown)
+active = { { name = "Well Fed", spellId = 1243969 } }
+event("UNIT_AURA", "player")
+assert(not food.shown, "XP aura ID must satisfy food even when the client name differs")
+active = { { name = "Well Fed", spellId = 1248422 } }
+event("UNIT_AURA", "player")
+assert(not food.shown, "client-observed Well Fed includes the verified XP effect")
+event("PLAYER_STARTED_MOVING")
+event("PLAYER_STOPPED_MOVING")
+assert(not food.shown, "standing still again must not restore food with the XP-bearing aura")
+active = { { name = "Well Fed", spellId = 1 } }
+event("UNIT_AURA", "player")
+assert(food.shown, "unverified Well Fed IDs must not satisfy the XP reminder")
+active = { { name = "Well Fed", spellId = 1248422 } }
+local modernAuras = C_UnitAuras
+C_UnitAuras = nil
+UnitBuff = function(_, index)
+    local aura = active[index]
+    if aura then return aura.name, nil, nil, nil, nil, nil, nil, nil, nil, aura.spellId end
+end
+event("UNIT_AURA", "player")
+assert(not food.shown, "legacy aura ID must also satisfy food")
+C_UnitAuras, UnitBuff = modernAuras, nil
 active = { "Food" }
 event("UNIT_AURA", "player")
 assert(food.shown, "eating without the XP buff does not satisfy the reminder")
@@ -261,4 +313,26 @@ C_SpellBook.GetSpellBookItemName = function(slot, bank)
 end
 event("SPELLS_CHANGED")
 assert(fortitude.shown and not guard.shown, "modern book scan must recognize only learned names")
+-- Status remains in chat and is also selected for manual clipboard copying.
+active = { { name = "Well Fed", spellId = 1243969 }, "Inner Fire" }
+SlashCmdList.BUFFED("status")
+local statusBox, statusPanel
+for _, frame in ipairs(frames) do
+    if frame.HighlightTextArgs then statusBox = frame end
+    if frame.SetFrameStrataArgs then statusPanel = frame end
+end
+assert(statusBox and statusPanel.shown)
+assert(statusBox.SetTextArgs[1]:find("Well Fed XP Boost", 1, true))
+assert(statusBox.SetTextArgs[1]:find("Well Fed (spell ID: 1243969)", 1, true))
+assert(statusBox.SetTextArgs[1]:find("Inner Fire (spell ID: unavailable)", 1, true))
+assert(statusBox.SetTextArgs[1]:find("Player buffs via C_UnitAuras.GetBuffDataByIndex:", 1, true))
+assert(statusBox.SetFocusArgs and statusBox.HighlightTextArgs)
+statusPanel:Hide()
+statusPanel.OnHide()
+assert(statusBox.ClearFocusArgs)
+local frameCount = #frames
+SlashCmdList.BUFFED("status")
+assert(#frames == frameCount and statusPanel.shown, "status window should be reused")
+statusBox.OnEscapePressed()
+assert(not statusPanel.shown)
 print("Buffed mock smoke tests passed")

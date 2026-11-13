@@ -7,12 +7,17 @@ local buffs = {
     { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude" },
     { key = "fire", name = "Inner Fire" },
     { key = "shadowguard", name = "Shadowguard" },
-    { key = "food", name = "Well Fed XP Boost", item = true, icon = "Interface\\Icons\\INV_Misc_Food_18" },
+    -- XP effect: https://nether.wowhead.com/forever/tooltip/spell/1243969
+    -- Client-observed Well Fed aura includes that XP effect in buffspells:
+    -- https://nether.wowhead.com/forever/tooltip/spell/1248422
+    { key = "food", name = "Well Fed XP Boost", spellID = 1243969, alternateSpellID = 1248422,
+        item = true, icon = "Interface\\Icons\\INV_Misc_Food_18" },
     { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance" },
 }
 
 local events = CreateFrame("Frame")
 local anchor, initialized
+local enteredWorld = false
 local moving = false
 local buttons = {}
 
@@ -71,19 +76,23 @@ local function Known(name)
 end
 
 local function ActiveBuffs()
-    local active = {}
+    local active, details = {}, {}
     for i = 1, 255 do
-        local name
+        local name, spellID
         if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
             local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
             name = aura and aura.name
+            spellID = aura and aura.spellId
         elseif UnitBuff then
-            name = UnitBuff("player", i)
+            local aura = { UnitBuff("player", i) }
+            name, spellID = aura[1], aura[10]
         end
         if not name then break end
         active[name] = true
+        if spellID then active[spellID] = true end
+        details[#details + 1] = name .. " (spell ID: " .. tostring(spellID or "unavailable") .. ")"
     end
-    return active
+    return active, details
 end
 
 -- Highest priority first. IDs avoid depending on cached item-name data.
@@ -178,7 +187,8 @@ local function ItemTexture(id, fallback)
 end
 
 local function HasBuff(active, buff)
-    return active[buff.name] or active[buff.alternate] or active[buff.other]
+    return active[buff.spellID] or active[buff.alternateSpellID]
+        or active[buff.name] or active[buff.alternate] or active[buff.other]
 end
 
 local function RestorePosition()
@@ -195,9 +205,14 @@ local function Refresh()
     -- Never mutate secure buttons in combat. Their parent is hidden by a
     -- secure state driver, then we rebuild once combat ends.
     if not initialized or InCombatLockdown() then return end
+    if UnitIsDeadOrGhost("player") or IsMounted() then
+        for _, button in ipairs(buttons) do button:Hide() end
+        anchor.label:SetShown(BuffedDB.unlocked)
+        anchor:EnableMouse(BuffedDB.unlocked)
+        return
+    end
     local active = ActiveBuffs()
     local visible = 0
-    local suppressed = UnitIsDeadOrGhost("player") or IsMounted()
     for i, buff in ipairs(buffs) do
         local button = buttons[i]
         local item = buff.item and FindConsumable(buff)
@@ -209,7 +224,7 @@ local function Refresh()
             button.displayName = item and item.name or buff.name
         end
         local missing = BuffedDB.enabled[buff.key] and available and not HasBuff(active, buff)
-        if missing and not suppressed and not (buff.key == "food" and moving) then
+        if missing and not (buff.key == "food" and moving) then
             button:ClearAllPoints()
             button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", visible * 42, -4)
             button.icon:SetTexture(item and ItemTexture(item.id, buff.icon) or buff.icon or SpellTexture(buff.name) or 136243)
@@ -288,6 +303,40 @@ local function Initialize()
     Refresh()
 end
 
+local statusWindow, statusText
+local function ShowStatus(lines)
+    if not statusWindow then
+        statusWindow = CreateFrame("Frame", nil, UIParent)
+        statusWindow:SetSize(600, 360)
+        statusWindow:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        statusWindow:SetFrameStrata("DIALOG")
+        local background = statusWindow:CreateTexture(nil, "BACKGROUND")
+        background:SetAllPoints()
+        background:SetColorTexture(0, 0, 0, 0.95)
+        local title = statusWindow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        title:SetPoint("TOPLEFT", 16, -16)
+        title:SetText("Buffed status — Ctrl+C to copy; Escape to close")
+        local close = CreateFrame("Button", nil, statusWindow, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", statusWindow, "TOPRIGHT", 0, 0)
+        close:SetScript("OnClick", function() statusWindow:Hide() end)
+        local scroll = CreateFrame("ScrollFrame", nil, statusWindow, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", statusWindow, "TOPLEFT", 16, -44)
+        scroll:SetPoint("BOTTOMRIGHT", statusWindow, "BOTTOMRIGHT", -36, 16)
+        statusText = CreateFrame("EditBox", nil, scroll)
+        statusText:SetSize(540, 280)
+        statusText:SetMultiLine(true)
+        statusText:SetFontObject("ChatFontNormal")
+        statusText:SetAutoFocus(false)
+        statusText:SetScript("OnEscapePressed", function() statusWindow:Hide() end)
+        scroll:SetScrollChild(statusText)
+        statusWindow:SetScript("OnHide", function() statusText:ClearFocus() end)
+    end
+    statusText:SetText(table.concat(lines, "\n"))
+    statusWindow:Show()
+    statusText:SetFocus()
+    statusText:HighlightText()
+end
+
 SLASH_BUFFED1 = "/buffed"
 SlashCmdList.BUFFED = function(message)
     if not initialized then
@@ -301,15 +350,25 @@ SlashCmdList.BUFFED = function(message)
         return
     end
     if command == "status" then
-        local active = ActiveBuffs()
-        Print("Combat: " .. tostring(InCombatLockdown()) .. ", mounted: " .. tostring(IsMounted())
+        local active, details = ActiveBuffs()
+        local lines = {}
+        local function AddLine(line)
+            lines[#lines + 1] = line
+            Print(line)
+        end
+        AddLine("Combat: " .. tostring(InCombatLockdown()) .. ", mounted: " .. tostring(IsMounted())
             .. ", dead/ghost: " .. tostring(UnitIsDeadOrGhost("player")) .. ", moving: " .. tostring(moving))
         for _, buff in ipairs(buffs) do
-            Print(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
+            AddLine(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
                 .. (buff.item and (FindConsumable(buff) and ", usable item in bags" or ", no supported usable item")
                     or (Known(buff.name) and ", learned" or ", not learned"))
                 .. (HasBuff(active, buff) and ", active" or ", missing"))
         end
+        AddLine("Player buffs via " .. (C_UnitAuras and C_UnitAuras.GetBuffDataByIndex
+            and "C_UnitAuras.GetBuffDataByIndex" or "UnitBuff") .. ":")
+        if #details == 0 then AddLine("(none returned)") end
+        for _, detail in ipairs(details) do AddLine(detail) end
+        ShowStatus(lines)
         return
     end
     if InCombatLockdown() then
@@ -336,7 +395,6 @@ SlashCmdList.BUFFED = function(message)
     Refresh()
 end
 
-events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("UNIT_AURA")
@@ -350,14 +408,16 @@ events:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 events:RegisterEvent("PLAYER_STARTED_MOVING")
 events:RegisterEvent("PLAYER_STOPPED_MOVING")
 events:SetScript("OnEvent", function(_, event, unit)
-    if event == "UNIT_AURA" and unit ~= "player" then return end
-    -- Track transitions even in combat, without touching secure frames there.
-    -- Events are authoritative: speed can still reflect the previous state
-    -- during the movement callback. Sample it only on login/world entry.
-    if event == "PLAYER_STARTED_MOVING" then moving = true
-    elseif event == "PLAYER_STOPPED_MOVING" then moving = false
-    elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+    if event == "PLAYER_ENTERING_WORLD" then
+        enteredWorld = true
         moving = GetUnitSpeed("player") > 0
     end
+    -- Spell/bag/aura events can arrive before the player enters the world.
+    -- If world entry occurs in combat, initialization waits until combat ends.
+    if not enteredWorld then return end
+    if event == "UNIT_AURA" and unit ~= "player" then return end
+    -- Track transitions even in combat, without touching secure frames there.
+    if event == "PLAYER_STARTED_MOVING" then moving = true
+    elseif event == "PLAYER_STOPPED_MOVING" then moving = false end
     if not initialized then Initialize() else Refresh() end
 end)

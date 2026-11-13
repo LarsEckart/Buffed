@@ -11,6 +11,13 @@ Original implementation inspired by BuffCheck; no external libraries required.
 - **XP food** reminder, on by default, only when a supported, usable food is in
   your bags and **Well Fed XP Boost** is missing. Click to eat, then remain seated
   for at least 10 seconds for **+5% XP from kills**. Plain Well Fed does not count.
+  Recognizes the XP effect by name or spell ID `1243969`, and the client-observed
+  **Well Fed** aura `1248422`. Wowhead Forever's `buffspells` confirms that this
+  specific Well Fed aura includes the 5% XP effect; other Well Fed IDs are not
+  assumed to grant XP. Sources:
+  https://nether.wowhead.com/forever/tooltip/spell/1243969
+  https://nether.wowhead.com/forever/tooltip/spell/1248422
+  Other XP-bearing Well Fed aura IDs remain unverified.
   The allowlist contains foods verified on Wowhead Forever, including Roasted
   Boar Meat, Crab Cake, Strider Stew, Smoked Sagefish, and Roast Raptor. It is not
   exhaustive. Roasted Boar Meat is preferred, then lower-level foods; selection
@@ -23,6 +30,10 @@ Original implementation inspired by BuffCheck; no external libraries required.
   hides while moving and returns when you stop; other icons are unaffected.
   Movement updates are event-driven, with no polling.
 - Position and enabled reminders are saved per character.
+- Initializes on world entry, not login or earlier bag/spell events. If world
+  entry occurs in combat, initialization waits until combat ends. Normal updates
+  skip buff, spellbook, and bag scans while dead/ghost or mounted; relevant
+  events still hide icons and refresh them when you return.
 
 No party/raid scanning, expiry warnings, general food detection, other consumable
 tracking beyond the items above, minimap button, or options panel yet.
@@ -38,7 +49,10 @@ Missing learned buffs appear near the center, slightly below your character.
 - `/buffed unlock` — drag the **Buffed** label to move the icons
 - `/buffed lock` — finish moving
 - `/buffed reset` — reset position
-- `/buffed status` — show enabled/learned status
+- `/buffed status` — show enabled/learned status and the client's active buff
+  names/IDs (including the aura API used) in chat and a copy window.
+  Text is selected automatically: press **Ctrl+C** to copy, then **Escape** to
+  close. WoW addons cannot write directly to the system clipboard.
 - `/buffed fortitude`, `fire`, `shadowguard`, `food`, or `intellect` — toggle that reminder
 
 ### In-game smoke test
