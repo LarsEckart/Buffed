@@ -2,12 +2,6 @@
 local frames, active, learned = {}, {}, {}
 local combat, dead, mounted = false, false, false
 local bags, level = {}, 22
-function UnitLevel() return level end
-C_Container = {
-    GetContainerNumSlots = function(bag) return #(bags[bag] or {}) end,
-    GetContainerItemID = function(bag, slot) return bags[bag][slot] end,
-}
-C_Item = { GetItemIconByID = function(id) return id + 100000 end }
 local mutations = 0
 local function protectedMutation()
     assert(not combat, "secure frame mutated in combat")
@@ -15,7 +9,7 @@ local function protectedMutation()
 end
 local methods = {}
 for _, name in ipairs({ "SetSize", "SetMovable", "SetClampedToScreen", "RegisterForDrag",
-    "SetScript", "RegisterEvent", "SetTexture", "SetAllPoints", "SetHighlightTexture",
+    "RegisterEvent", "SetTexture", "SetAllPoints", "SetHighlightTexture",
     "RegisterForClicks", "StartMoving", "StopMovingOrSizing", "SetText", "SetShown" }) do
     methods[name] = function(self, ...) self[name .. "Args"] = { ... } end
 end
@@ -35,27 +29,25 @@ function CreateFrame(_, name)
     return frame
 end
 UIParent = {}
-DEFAULT_CHAT_FRAME = { AddMessage = function() end }
+local messages = {}
+DEFAULT_CHAT_FRAME = { AddMessage = function(_, message) messages[#messages + 1] = message end }
 SlashCmdList = {}
 function UnitClass() return "Priest", "PRIEST" end
+function UnitLevel() return level end
 function UnitIsDeadOrGhost() return dead end
 function IsMounted() return mounted end
 function InCombatLockdown() return combat end
 function RegisterStateDriver(_, state, condition)
     assert(state == "visibility" and condition == "[combat] hide; show")
 end
-local spellIDs = {
-    ["Power Word: Fortitude"] = 1244,
-    ["Inner Fire"] = 588,
-    ["Divine Spirit"] = 14752,
-    ["Shadow Protection"] = 976,
-    ["Shadowform"] = 15473,
-    ["Shadowguard"] = 18137,
+C_Container = {
+    GetContainerNumSlots = function(bag) return #(bags[bag] or {}) end,
+    GetContainerItemID = function(bag, slot) return bags[bag][slot] end,
 }
+C_Item = { GetItemIconByID = function(id) return id + 100000 end }
+local spellIDs = { ["Power Word: Fortitude"] = 1244, ["Inner Fire"] = 588, ["Shadowguard"] = 18137 }
 Enum = { SpellBookSpellBank = { Player = 0 } }
-C_Spell = { GetSpellInfo = function(name)
-    return { iconID = 123, spellID = spellIDs[name] }
-end }
+C_Spell = { GetSpellInfo = function(name) return { iconID = 123, spellID = spellIDs[name] } end }
 C_SpellBook = { IsSpellInSpellBook = function(id, bank, overrides)
     assert(type(id) == "number", "spellbook lookup requires an ID, not a name")
     assert(bank == 0 and overrides == true, "player spell bank must be explicit")
@@ -69,22 +61,40 @@ end }
 
 assert(loadfile("Buffed.lua"))("Buffed")
 local function event(name, unit) frames[1].OnEvent(frames[1], name, unit) end
-learned["Power Word: Fortitude"] = true
-learned["Inner Fire"] = true
-learned["Shadowform"] = true
+learned["Power Word: Fortitude"], learned["Inner Fire"] = true, true
 event("PLAYER_LOGIN")
-assert(BuffedButton1.shown and BuffedButton2.shown, "missing buffs should appear")
-assert(not BuffedButton3.shown, "unlearned spirit should not appear")
-assert(not BuffedButton5.shown, "optional form defaults off")
-assert(BuffedButton1.unit == "player" and BuffedButton1.spell == "Power Word: Fortitude")
+-- Use semantic aliases so test assertions do not depend on the button order.
+local fortitude, fire, guard, food, intellect
+for _, frame in ipairs(frames) do
+    if frame.spell == "Power Word: Fortitude" then fortitude = frame
+    elseif frame.spell == "Inner Fire" then fire = frame
+    elseif frame.spell == "Shadowguard" then guard = frame end
+end
+-- Item buttons have no selected item until an eligible consumable is carried.
+bags[0] = { 2681, 2290 }
+event("BAG_UPDATE_DELAYED")
+for _, frame in ipairs(frames) do
+    if frame.item == "item:2681" then food = frame
+    elseif frame.item == "item:2290" then intellect = frame end
+end
+assert(fortitude and fire and guard and food and intellect)
+bags[0] = {}
+event("BAG_UPDATE_DELAYED")
+assert(fortitude.shown and fire.shown, "missing buffs should appear")
+assert(fortitude.unit == "player" and not guard.shown, "unlearned Shadowguard should hide")
+for _, command in ipairs({ "spirit", "shadow", "form" }) do
+    SlashCmdList.BUFFED(command)
+    assert(messages[#messages]:find("Unknown command", 1, true), "removed reminder must not be configurable")
+    assert(BuffedDB.enabled[command] == nil)
+end
 active = { "Prayer of Fortitude", "Inner Fire" }
 event("UNIT_AURA", "player")
-assert(not BuffedButton1.shown and not BuffedButton2.shown, "active buffs should hide")
+assert(not fortitude.shown and not fire.shown, "active buffs should hide")
 active = {}
 event("UNIT_AURA", "target")
-assert(not BuffedButton1.shown, "other units should not refresh")
+assert(not fortitude.shown, "other units should not refresh")
 event("UNIT_AURA", "player")
-assert(BuffedButton1.shown)
+assert(fortitude.shown)
 combat = true
 local before = mutations
 event("UNIT_AURA", "player")
@@ -94,156 +104,131 @@ combat = false
 event("PLAYER_REGEN_ENABLED")
 mounted = true
 event("PLAYER_MOUNT_DISPLAY_CHANGED")
-assert(not BuffedButton1.shown)
+assert(not fortitude.shown)
 mounted, dead = false, true
 event("PLAYER_DEAD")
-assert(not BuffedButton1.shown)
+assert(not fortitude.shown)
 dead = false
 event("PLAYER_UNGHOST")
-assert(BuffedButton1.shown)
+assert(fortitude.shown)
 SlashCmdList.BUFFED("fire")
-assert(not BuffedButton2.shown and not BuffedDB.enabled.fire)
-SlashCmdList.BUFFED("form")
-assert(BuffedButton5.shown)
-assert(not BuffedButton6.shown, "unlearned Shadowguard should not appear")
+assert(not fire.shown and not BuffedDB.enabled.fire)
 learned["Shadowguard"] = true
 event("SPELLS_CHANGED")
-assert(BuffedButton6.shown and BuffedDB.enabled.shadowguard, "learned Shadowguard defaults on")
-assert(BuffedButton6.unit == "player" and BuffedButton6.spell == "Shadowguard")
+assert(guard.shown and guard.unit == "player" and BuffedDB.enabled.shadowguard)
 active = { "Shadowguard" }
 event("UNIT_AURA", "player")
-assert(not BuffedButton6.shown, "active Shadowguard should hide")
+assert(not guard.shown)
 active = {}
 event("UNIT_AURA", "player")
-assert(BuffedButton6.shown, "expired or depleted Shadowguard should reappear")
+assert(guard.shown, "depleted Shadowguard should reappear")
 SlashCmdList.BUFFED("shadowguard")
-assert(not BuffedButton6.shown and not BuffedDB.enabled.shadowguard)
+assert(not guard.shown)
 
-assert(BuffedDB.enabled.food and not BuffedButton7.shown, "no supported food means no Well Fed reminder")
-bags[0] = { 2679 }
-event("BAG_UPDATE_DELAYED")
-assert(not BuffedButton7.shown, "unlisted food must not trigger a reminder")
+assert(BuffedDB.enabled.food and not food.shown)
 bags[0] = { 2681 }
 event("BAG_UPDATE_DELAYED")
-assert(BuffedButton7.shown and BuffedButton7.item == "item:2681", "carried Roasted Boar Meat should appear")
-assert(BuffedButton7.type == "item" and BuffedButton7.unit == "player", "food must be clickable")
-assert(BuffedButton7.icon.SetTextureArgs[1] == 102681, "show the food's actual icon")
+assert(food.shown and food.item == "item:2681" and food.type == "item" and food.unit == "player")
+assert(food.icon.SetTextureArgs[1] == 102681)
 active = { "Well Fed" }
 event("UNIT_AURA", "player")
-assert(BuffedButton7.shown, "non-XP Well Fed must not hide the XP food reminder")
+assert(food.shown, "non-XP Well Fed must not hide the XP reminder")
 active = { "Well Fed XP Boost" }
 event("UNIT_AURA", "player")
-assert(not BuffedButton7.shown, "Forever's XP buff should also satisfy Well Fed")
+assert(not food.shown)
 active = { "Food" }
 event("UNIT_AURA", "player")
-assert(BuffedButton7.shown, "eating without Well Fed should not satisfy the reminder")
+assert(food.shown, "eating without the XP buff does not satisfy the reminder")
 active = {}
-event("UNIT_AURA", "player")
-assert(BuffedButton7.shown, "expired Well Fed should show the reminder")
 SlashCmdList.BUFFED("food")
-assert(not BuffedButton7.shown and not BuffedDB.enabled.food)
+assert(not food.shown)
 SlashCmdList.BUFFED("food")
-assert(BuffedButton7.shown)
+assert(food.shown)
 combat = true
 bags[0] = {}
 before = mutations
 event("BAG_UPDATE_DELAYED")
-assert(mutations == before, "food bag updates must not mutate buttons in combat")
+assert(mutations == before)
 combat = false
 event("PLAYER_REGEN_ENABLED")
-assert(not BuffedButton7.shown and BuffedButton7.item == nil, "removing last food clears reminder and action")
+assert(not food.shown and food.item == nil)
 for _, id in ipairs({ 2682, 5477, 2683, 21072, 12210, 3665 }) do
     bags[0] = { id }
     event("BAG_UPDATE_DELAYED")
-    assert(BuffedButton7.shown and BuffedButton7.item == "item:" .. id, "verified XP food should be selected")
+    assert(food.shown and food.item == "item:" .. id)
 end
-for _, id in ipairs({ 5525, 5527, 17197, 17198, 6657, 12217 }) do
+for _, id in ipairs({ 2679, 5525, 5527, 17197, 17198, 6657, 12217, 13933 }) do
     bags[0] = { id }
     event("BAG_UPDATE_DELAYED")
-    assert(not BuffedButton7.shown, "food without verified XP must not be selected")
+    assert(not food.shown, "non-XP or unusable food must not be selected")
 end
-bags[0] = { 13933 }
-event("BAG_UPDATE_DELAYED")
-assert(not BuffedButton7.shown, "high-level XP food should not appear at level 22")
 bags[0] = { 12210, 2681, 2683 }
 event("BAG_UPDATE_DELAYED")
-assert(BuffedButton7.item == "item:2681", "prefer existing boar meat over stat bonuses")
+assert(food.item == "item:2681", "prefer boar meat over stat bonuses")
 bags[0] = {}
 event("BAG_UPDATE_DELAYED")
 
-assert(not BuffedButton8.shown, "no scroll in bags means no Intellect reminder")
+assert(not intellect.shown)
 bags[0] = { 955, 2290, 4419 }
 event("BAG_UPDATE_DELAYED")
-assert(BuffedButton8.shown and BuffedButton8.item == "item:2290", "prefer highest usable rank at level 22")
-assert(BuffedButton8.type == "item" and BuffedButton8.unit == "player")
-assert(BuffedButton8.icon.SetTextureArgs[1] == 102290, "use the carried scroll's icon")
+assert(intellect.shown and intellect.item == "item:2290", "prefer highest usable rank at level 22")
+assert(intellect.type == "item" and intellect.unit == "player" and intellect.icon.SetTextureArgs[1] == 102290)
 for _, name in ipairs({ "Intellect", "Arcane Intellect", "Arcane Brilliance" }) do
     active = { name }
     event("UNIT_AURA", "player")
-    assert(not BuffedButton8.shown, name .. " should suppress the scroll")
+    assert(not intellect.shown)
 end
 active = {}
 event("UNIT_AURA", "player")
-assert(BuffedButton8.shown)
+assert(intellect.shown)
 combat = true
 bags[0] = {}
 before = mutations
 event("BAG_UPDATE_DELAYED")
-assert(mutations == before, "bag updates must not mutate secure buttons in combat")
+assert(mutations == before)
 combat = false
 event("PLAYER_REGEN_ENABLED")
-assert(not BuffedButton8.shown and BuffedButton8.item == nil, "remove stale item action when scroll is gone")
-bags[0] = { 4419 }
-event("BAG_UPDATE_DELAYED")
-assert(not BuffedButton8.shown, "unusable high rank should not appear")
-level = 35
-event("PLAYER_LEVEL_UP")
-assert(BuffedButton8.shown and BuffedButton8.item == "item:4419")
+assert(not intellect.shown and intellect.item == nil)
 for _, rank in ipairs({ { id = 955, level = 5 }, { id = 2290, level = 20 },
     { id = 4419, level = 35 }, { id = 10308, level = 50 } }) do
     bags[0] = { rank.id }
     level = rank.level - 1
     event("BAG_UPDATE_DELAYED")
-    assert(not BuffedButton8.shown, "scroll must hide below required level " .. rank.level)
+    assert(not intellect.shown, "scroll must hide below required level " .. rank.level)
     level = rank.level
     event("PLAYER_LEVEL_UP")
-    assert(BuffedButton8.shown and BuffedButton8.item == "item:" .. rank.id,
-        "scroll must appear at required level " .. rank.level)
+    assert(intellect.shown and intellect.item == "item:" .. rank.id)
 end
 SlashCmdList.BUFFED("intellect")
-assert(not BuffedButton8.shown)
+assert(not intellect.shown)
 SlashCmdList.BUFFED("intellect")
--- Check the legacy bag API path too.
 GetContainerNumSlots = C_Container.GetContainerNumSlots
 GetContainerItemID = C_Container.GetContainerItemID
 C_Container = nil
 bags[0] = { 955, 2681 }
 event("BAG_UPDATE_DELAYED")
-assert(BuffedButton8.shown and BuffedButton8.item == "item:955")
-assert(BuffedButton7.shown and BuffedButton7.item == "item:2681", "legacy bag API should also find food")
+assert(intellect.shown and intellect.item == "item:955" and food.shown and food.item == "item:2681")
 bags[0] = {}
 event("BAG_UPDATE_DELAYED")
 
--- The learned rank can differ from the ID returned by a name lookup.
+-- A name lookup can resolve to a different rank ID than the learned rank.
 GetNumSpellTabs = function() return 1 end
 GetSpellTabInfo = function() return "Discipline", nil, 0, 1 end
 GetSpellBookItemName = function(slot, book)
     assert(slot == 1 and book == "spell")
-    return "Power Word: Fortitude", "Rank 3"
+    return "Power Word: Fortitude", "Rank 2"
 end
 learned["Power Word: Fortitude"] = false
+BuffedDB.enabled.shadowguard = true
 event("SPELLS_CHANGED")
-assert(BuffedButton1.shown, "ranked spellbook names should be recognized")
-assert(not BuffedButton5.shown, "spellbook scan should reject unlearned names")
+assert(fortitude.shown and not guard.shown, "legacy book scan must recognize only learned names")
 GetNumSpellTabs, GetSpellTabInfo, GetSpellBookItemName = nil, nil, nil
 C_SpellBook.GetNumSpellBookSkillLines = function() return 1 end
-C_SpellBook.GetSpellBookSkillLineInfo = function()
-    return { itemIndexOffset = 0, numSpellBookItems = 1 }
-end
+C_SpellBook.GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = 1 } end
 C_SpellBook.GetSpellBookItemName = function(slot, bank)
     assert(slot == 1 and bank == 0)
     return "Power Word: Fortitude"
 end
 event("SPELLS_CHANGED")
-assert(BuffedButton1.shown, "modern spellbook names should recognize ranked spells")
+assert(fortitude.shown and not guard.shown, "modern book scan must recognize only learned names")
 print("Buffed mock smoke tests passed")

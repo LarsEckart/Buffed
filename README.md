@@ -5,8 +5,7 @@ Original implementation inspired by BuffCheck; no external libraries required.
 
 ## First increment
 
-- Missing **Power Word: Fortitude**, **Inner Fire**, **Divine Spirit**, and **Shadowguard** reminders.
-- Optional **Shadow Protection** and **Shadowform** reminders, off by default.
+- Missing **Power Word: Fortitude**, **Inner Fire**, and **Shadowguard** reminders.
 - Only learned spells appear. Prayer equivalents also satisfy their buff group.
 - Click a priest spell icon to cast the single-target buff on yourself.
 - **XP food** reminder, on by default, only when a supported, usable food is in
@@ -38,7 +37,7 @@ Missing learned buffs appear near the center, slightly below your character.
 - `/buffed lock` — finish moving
 - `/buffed reset` — reset position
 - `/buffed status` — show enabled/learned status
-- `/buffed fortitude`, `fire`, `spirit`, `shadow`, `form`, `shadowguard`, `food`, or `intellect` — toggle that reminder
+- `/buffed fortitude`, `fire`, `shadowguard`, `food`, or `intellect` — toggle that reminder
 
 ### In-game smoke test
 

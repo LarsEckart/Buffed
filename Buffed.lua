@@ -6,9 +6,6 @@ if class ~= "PRIEST" then return end
 local buffs = {
     { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude" },
     { key = "fire", name = "Inner Fire" },
-    { key = "spirit", name = "Divine Spirit", alternate = "Prayer of Spirit" },
-    { key = "shadow", name = "Shadow Protection", alternate = "Prayer of Shadow Protection", optional = true },
-    { key = "form", name = "Shadowform", optional = true },
     { key = "shadowguard", name = "Shadowguard" },
     { key = "food", name = "Well Fed XP Boost", item = true, icon = "Interface\\Icons\\INV_Misc_Food_18" },
     { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance" },
@@ -233,7 +230,7 @@ local function Initialize()
     if type(BuffedDB.enabled) ~= "table" then BuffedDB.enabled = {} end
     for _, buff in ipairs(buffs) do
         if BuffedDB.enabled[buff.key] == nil then
-            BuffedDB.enabled[buff.key] = not buff.optional
+            BuffedDB.enabled[buff.key] = true
         end
     end
 
@@ -299,7 +296,7 @@ SlashCmdList.BUFFED = function(message)
     local command = message:lower():match("^%s*(.-)%s*$")
     if command == "" or command == "help" then
         Print("/buffed unlock | lock | reset | status")
-        Print("Toggle a reminder: /buffed fortitude | fire | spirit | shadow | form | shadowguard | food | intellect")
+        Print("Toggle a reminder: /buffed fortitude | fire | shadowguard | food | intellect")
         return
     end
     if command == "status" then
