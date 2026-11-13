@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Buffed
+## Notes: Small, English-only priest self-buff reminders for WoW Forever.
+## Author: Buffed
+## Version: 0.1.0
+## SavedVariablesPerCharacter: BuffedDB
+
+Buffed.lua
