@@ -130,7 +130,7 @@ assert(BuffedButton7.type == "item" and BuffedButton7.unit == "player", "food mu
 assert(BuffedButton7.icon.SetTextureArgs[1] == 102681, "show the food's actual icon")
 active = { "Well Fed" }
 event("UNIT_AURA", "player")
-assert(not BuffedButton7.shown, "Well Fed should hide the food reminder")
+assert(BuffedButton7.shown, "non-XP Well Fed must not hide the XP food reminder")
 active = { "Well Fed XP Boost" }
 event("UNIT_AURA", "player")
 assert(not BuffedButton7.shown, "Forever's XP buff should also satisfy Well Fed")
@@ -152,6 +152,24 @@ assert(mutations == before, "food bag updates must not mutate buttons in combat"
 combat = false
 event("PLAYER_REGEN_ENABLED")
 assert(not BuffedButton7.shown and BuffedButton7.item == nil, "removing last food clears reminder and action")
+for _, id in ipairs({ 2682, 5477, 2683, 21072, 12210, 3665 }) do
+    bags[0] = { id }
+    event("BAG_UPDATE_DELAYED")
+    assert(BuffedButton7.shown and BuffedButton7.item == "item:" .. id, "verified XP food should be selected")
+end
+for _, id in ipairs({ 5525, 5527, 17197, 17198, 6657, 12217 }) do
+    bags[0] = { id }
+    event("BAG_UPDATE_DELAYED")
+    assert(not BuffedButton7.shown, "food without verified XP must not be selected")
+end
+bags[0] = { 13933 }
+event("BAG_UPDATE_DELAYED")
+assert(not BuffedButton7.shown, "high-level XP food should not appear at level 22")
+bags[0] = { 12210, 2681, 2683 }
+event("BAG_UPDATE_DELAYED")
+assert(BuffedButton7.item == "item:2681", "prefer existing boar meat over stat bonuses")
+bags[0] = {}
+event("BAG_UPDATE_DELAYED")
 
 assert(not BuffedButton8.shown, "no scroll in bags means no Intellect reminder")
 bags[0] = { 955, 2290, 4419 }
@@ -178,9 +196,20 @@ assert(not BuffedButton8.shown and BuffedButton8.item == nil, "remove stale item
 bags[0] = { 4419 }
 event("BAG_UPDATE_DELAYED")
 assert(not BuffedButton8.shown, "unusable high rank should not appear")
-level = 30
+level = 35
 event("PLAYER_LEVEL_UP")
 assert(BuffedButton8.shown and BuffedButton8.item == "item:4419")
+for _, rank in ipairs({ { id = 955, level = 5 }, { id = 2290, level = 20 },
+    { id = 4419, level = 35 }, { id = 10308, level = 50 } }) do
+    bags[0] = { rank.id }
+    level = rank.level - 1
+    event("BAG_UPDATE_DELAYED")
+    assert(not BuffedButton8.shown, "scroll must hide below required level " .. rank.level)
+    level = rank.level
+    event("PLAYER_LEVEL_UP")
+    assert(BuffedButton8.shown and BuffedButton8.item == "item:" .. rank.id,
+        "scroll must appear at required level " .. rank.level)
+end
 SlashCmdList.BUFFED("intellect")
 assert(not BuffedButton8.shown)
 SlashCmdList.BUFFED("intellect")
