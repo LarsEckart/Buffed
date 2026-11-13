@@ -11,10 +11,13 @@ Original implementation inspired by BuffCheck; no external libraries required.
 - Click a priest spell icon to cast the single-target buff on yourself.
 - **Well Fed** reminder, on by default. Eat buff food from your bags; this icon
   is reminder-only and does not select or use food.
+- **Scroll of Intellect** reminder when a usable scroll is in your bags and
+  Intellect is missing. Click to use it on yourself. Supports classic ranks
+  I–IV and picks the highest usable rank; Arcane Intellect/Brilliance also hide it.
 - Hidden during combat, while dead/ghost, or while mounted.
 - Position and enabled reminders are saved per character.
 
-No party/raid scanning, expiry warnings, automatic food selection, other consumable tracking,
+No party/raid scanning, expiry warnings, automatic food selection, other consumable tracking beyond Scroll of Intellect,
 minimap button, or options panel yet.
 Other classes do nothing. Use an English game client.
 
@@ -29,7 +32,7 @@ Missing learned buffs appear near the center, slightly below your character.
 - `/buffed lock` — finish moving
 - `/buffed reset` — reset position
 - `/buffed status` — show enabled/learned status
-- `/buffed fortitude`, `fire`, `spirit`, `shadow`, `form`, `shadowguard`, or `food` — toggle that reminder
+- `/buffed fortitude`, `fire`, `spirit`, `shadow`, `form`, `shadowguard`, `food`, or `intellect` — toggle that reminder
 
 ### In-game smoke test
 
@@ -41,6 +44,9 @@ Missing learned buffs appear near the center, slightly below your character.
 5. Move the bar and toggle a reminder, then `/reload`: settings should persist.
 6. Without Well Fed, a food icon should appear. Eat buff food until Well Fed
    is applied: the icon should disappear. Remove Well Fed: it should return.
+7. Carry a usable Scroll of Intellect without an Intellect buff: its icon should
+   appear. Click it with another unit targeted: it should buff you and disappear.
+   Removing the last scroll from your bags should also hide the icon.
 
 Automated tests use mocked WoW APIs, not the actual client. In-game validation is
 still required, particularly Forever's spellbook and secure-click behavior.

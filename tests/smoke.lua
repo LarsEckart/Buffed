@@ -1,6 +1,13 @@
 -- Standalone mock smoke test; not loaded by the addon.
 local frames, active, learned = {}, {}, {}
 local combat, dead, mounted = false, false, false
+local bags, level = {}, 22
+function UnitLevel() return level end
+C_Container = {
+    GetContainerNumSlots = function(bag) return #(bags[bag] or {}) end,
+    GetContainerItemID = function(bag, slot) return bags[bag][slot] end,
+}
+C_Item = { GetItemIconByID = function(id) return id + 100000 end }
 local mutations = 0
 local function protectedMutation()
     assert(not combat, "secure frame mutated in combat")
@@ -127,6 +134,47 @@ SlashCmdList.BUFFED("food")
 assert(not BuffedButton7.shown and not BuffedDB.enabled.food)
 SlashCmdList.BUFFED("food")
 assert(BuffedButton7.shown)
+
+assert(not BuffedButton8.shown, "no scroll in bags means no Intellect reminder")
+bags[0] = { 955, 2290, 4419 }
+event("BAG_UPDATE_DELAYED")
+assert(BuffedButton8.shown and BuffedButton8.item == "item:2290", "prefer highest usable rank at level 22")
+assert(BuffedButton8.type == "item" and BuffedButton8.unit == "player")
+assert(BuffedButton8.icon.SetTextureArgs[1] == 102290, "use the carried scroll's icon")
+for _, name in ipairs({ "Intellect", "Arcane Intellect", "Arcane Brilliance" }) do
+    active = { name }
+    event("UNIT_AURA", "player")
+    assert(not BuffedButton8.shown, name .. " should suppress the scroll")
+end
+active = {}
+event("UNIT_AURA", "player")
+assert(BuffedButton8.shown)
+combat = true
+bags[0] = {}
+before = mutations
+event("BAG_UPDATE_DELAYED")
+assert(mutations == before, "bag updates must not mutate secure buttons in combat")
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(not BuffedButton8.shown and BuffedButton8.item == nil, "remove stale item action when scroll is gone")
+bags[0] = { 4419 }
+event("BAG_UPDATE_DELAYED")
+assert(not BuffedButton8.shown, "unusable high rank should not appear")
+level = 30
+event("PLAYER_LEVEL_UP")
+assert(BuffedButton8.shown and BuffedButton8.item == "item:4419")
+SlashCmdList.BUFFED("intellect")
+assert(not BuffedButton8.shown)
+SlashCmdList.BUFFED("intellect")
+-- Check the legacy bag API path too.
+GetContainerNumSlots = C_Container.GetContainerNumSlots
+GetContainerItemID = C_Container.GetContainerItemID
+C_Container = nil
+bags[0] = { 955 }
+event("BAG_UPDATE_DELAYED")
+assert(BuffedButton8.shown and BuffedButton8.item == "item:955")
+bags[0] = {}
+event("BAG_UPDATE_DELAYED")
 
 -- The learned rank can differ from the ID returned by a name lookup.
 GetNumSpellTabs = function() return 1 end
