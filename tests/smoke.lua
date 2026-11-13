@@ -119,11 +119,21 @@ assert(BuffedButton6.shown, "expired or depleted Shadowguard should reappear")
 SlashCmdList.BUFFED("shadowguard")
 assert(not BuffedButton6.shown and not BuffedDB.enabled.shadowguard)
 
-assert(BuffedButton7.shown and BuffedDB.enabled.food, "missing Well Fed defaults on")
-assert(BuffedButton7.type == nil and BuffedButton7.spell == nil, "food reminder must not cast a spell")
+assert(BuffedDB.enabled.food and not BuffedButton7.shown, "no supported food means no Well Fed reminder")
+bags[0] = { 2679 }
+event("BAG_UPDATE_DELAYED")
+assert(not BuffedButton7.shown, "unlisted food must not trigger a reminder")
+bags[0] = { 2681 }
+event("BAG_UPDATE_DELAYED")
+assert(BuffedButton7.shown and BuffedButton7.item == "item:2681", "carried Roasted Boar Meat should appear")
+assert(BuffedButton7.type == "item" and BuffedButton7.unit == "player", "food must be clickable")
+assert(BuffedButton7.icon.SetTextureArgs[1] == 102681, "show the food's actual icon")
 active = { "Well Fed" }
 event("UNIT_AURA", "player")
 assert(not BuffedButton7.shown, "Well Fed should hide the food reminder")
+active = { "Well Fed XP Boost" }
+event("UNIT_AURA", "player")
+assert(not BuffedButton7.shown, "Forever's XP buff should also satisfy Well Fed")
 active = { "Food" }
 event("UNIT_AURA", "player")
 assert(BuffedButton7.shown, "eating without Well Fed should not satisfy the reminder")
@@ -134,6 +144,14 @@ SlashCmdList.BUFFED("food")
 assert(not BuffedButton7.shown and not BuffedDB.enabled.food)
 SlashCmdList.BUFFED("food")
 assert(BuffedButton7.shown)
+combat = true
+bags[0] = {}
+before = mutations
+event("BAG_UPDATE_DELAYED")
+assert(mutations == before, "food bag updates must not mutate buttons in combat")
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(not BuffedButton7.shown and BuffedButton7.item == nil, "removing last food clears reminder and action")
 
 assert(not BuffedButton8.shown, "no scroll in bags means no Intellect reminder")
 bags[0] = { 955, 2290, 4419 }
@@ -170,9 +188,10 @@ SlashCmdList.BUFFED("intellect")
 GetContainerNumSlots = C_Container.GetContainerNumSlots
 GetContainerItemID = C_Container.GetContainerItemID
 C_Container = nil
-bags[0] = { 955 }
+bags[0] = { 955, 2681 }
 event("BAG_UPDATE_DELAYED")
 assert(BuffedButton8.shown and BuffedButton8.item == "item:955")
+assert(BuffedButton7.shown and BuffedButton7.item == "item:2681", "legacy bag API should also find food")
 bags[0] = {}
 event("BAG_UPDATE_DELAYED")
 

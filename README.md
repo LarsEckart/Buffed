@@ -9,16 +9,18 @@ Original implementation inspired by BuffCheck; no external libraries required.
 - Optional **Shadow Protection** and **Shadowform** reminders, off by default.
 - Only learned spells appear. Prayer equivalents also satisfy their buff group.
 - Click a priest spell icon to cast the single-target buff on yourself.
-- **Well Fed** reminder, on by default. Eat buff food from your bags; this icon
-  is reminder-only and does not select or use food.
+- **Well Fed** reminder, on by default, only when **Roasted Boar Meat** (item 2681)
+  is in your bags. Click to eat, then remain seated for at least 10 seconds.
+  Well Fed or Forever's Well Fed XP Boost hides the reminder. Other foods are
+  not supported yet; more can be added to the small consumables list.
 - **Scroll of Intellect** reminder when a usable scroll is in your bags and
   Intellect is missing. Click to use it on yourself. Supports classic ranks
   I–IV and picks the highest usable rank; Arcane Intellect/Brilliance also hide it.
 - Hidden during combat, while dead/ghost, or while mounted.
 - Position and enabled reminders are saved per character.
 
-No party/raid scanning, expiry warnings, automatic food selection, other consumable tracking beyond Scroll of Intellect,
-minimap button, or options panel yet.
+No party/raid scanning, expiry warnings, general food detection, other consumable
+tracking beyond the items above, minimap button, or options panel yet.
 Other classes do nothing. Use an English game client.
 
 ## Try it
@@ -42,8 +44,9 @@ Missing learned buffs appear near the center, slightly below your character.
 3. Enter combat with a reminder visible: the bar should hide and return afterward.
 4. Mount/dismount and die/resurrect: reminders should hide and return appropriately.
 5. Move the bar and toggle a reminder, then `/reload`: settings should persist.
-6. Without Well Fed, a food icon should appear. Eat buff food until Well Fed
-   is applied: the icon should disappear. Remove Well Fed: it should return.
+6. Carry Roasted Boar Meat without Well Fed: its icon should appear. Click to
+   eat for at least 10 seconds: the icon should disappear once buffed. Removing
+   the last supported food from your bags should also hide the icon.
 7. Carry a usable Scroll of Intellect without an Intellect buff: its icon should
    appear. Click it with another unit targeted: it should buff you and disappear.
    Removing the last scroll from your bags should also hide the icon.

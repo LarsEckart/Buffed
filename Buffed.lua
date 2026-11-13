@@ -10,7 +10,7 @@ local buffs = {
     { key = "shadow", name = "Shadow Protection", alternate = "Prayer of Shadow Protection", optional = true },
     { key = "form", name = "Shadowform", optional = true },
     { key = "shadowguard", name = "Shadowguard" },
-    { key = "food", name = "Well Fed", reminderOnly = true, icon = "Interface\\Icons\\INV_Misc_Food_15" },
+    { key = "food", name = "Well Fed", item = true, alternate = "Well Fed XP Boost", icon = "Interface\\Icons\\INV_Misc_Food_18" },
     { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance" },
 }
 
@@ -88,16 +88,22 @@ local function ActiveBuffs()
     return active
 end
 
--- Classic scroll ranks. Prefer the highest rank the player can use; item
--- IDs avoid depending on item-name data being cached when bags are opened.
-local intellectScrolls = {
-    { id = 10308, level = 45, name = "Scroll of Intellect IV" },
-    { id = 4419, level = 30, name = "Scroll of Intellect III" },
-    { id = 2290, level = 15, name = "Scroll of Intellect II" },
-    { id = 955, level = 1, name = "Scroll of Intellect" },
+-- Highest priority first. IDs avoid depending on cached item-name data.
+-- Forever's Roasted Boar Meat grants Well Fed plus a separate XP buff:
+-- https://www.wowhead.com/forever/item=2681/roasted-boar-meat
+local consumables = {
+    food = {
+        { id = 2681, level = 1, name = "Roasted Boar Meat" },
+    },
+    intellect = {
+        { id = 10308, level = 45, name = "Scroll of Intellect IV" },
+        { id = 4419, level = 30, name = "Scroll of Intellect III" },
+        { id = 2290, level = 15, name = "Scroll of Intellect II" },
+        { id = 955, level = 1, name = "Scroll of Intellect" },
+    },
 }
 
-local function FindIntellectScroll()
+local function FindConsumable(buff)
     local slots = C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots
     local itemID = C_Container and C_Container.GetContainerItemID or GetContainerItemID
     if not slots or not itemID then return nil end
@@ -108,14 +114,14 @@ local function FindIntellectScroll()
             if id then carried[id] = true end
         end
     end
-    for _, scroll in ipairs(intellectScrolls) do
-        if carried[scroll.id] and UnitLevel("player") >= scroll.level then return scroll end
+    for _, item in ipairs(consumables[buff.key]) do
+        if carried[item.id] and UnitLevel("player") >= item.level then return item end
     end
 end
 
-local function ItemTexture(id)
+local function ItemTexture(id, fallback)
     local icon = C_Item and C_Item.GetItemIconByID or GetItemIcon
-    return (icon and icon(id)) or "Interface\\Icons\\INV_Scroll_01"
+    return (icon and icon(id)) or fallback or "Interface\\Icons\\INV_Scroll_01"
 end
 
 local function HasBuff(active, buff)
@@ -141,19 +147,19 @@ local function Refresh()
     local suppressed = UnitIsDeadOrGhost("player") or IsMounted()
     for i, buff in ipairs(buffs) do
         local button = buttons[i]
-        local scroll = buff.item and FindIntellectScroll()
+        local item = buff.item and FindConsumable(buff)
         local available
-        if buff.item then available = scroll ~= nil
-        else available = buff.reminderOnly or Known(buff.name) end
+        if buff.item then available = item ~= nil
+        else available = Known(buff.name) end
         if buff.item then
-            button:SetAttribute("item", scroll and ("item:" .. scroll.id) or nil)
-            button.displayName = scroll and scroll.name or "Scroll of Intellect"
+            button:SetAttribute("item", item and ("item:" .. item.id) or nil)
+            button.displayName = item and item.name or buff.name
         end
         local missing = BuffedDB.enabled[buff.key] and available and not HasBuff(active, buff)
         if missing and not suppressed then
             button:ClearAllPoints()
             button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", visible * 42, -4)
-            button.icon:SetTexture(scroll and ItemTexture(scroll.id) or buff.icon or SpellTexture(buff.name) or 136243)
+            button.icon:SetTexture(item and ItemTexture(item.id, buff.icon) or buff.icon or SpellTexture(buff.name) or 136243)
             button:Show()
             visible = visible + 1
         else
@@ -200,7 +206,7 @@ local function Initialize()
         if buff.item then
             button:SetAttribute("type", "item")
             button:SetAttribute("unit", "player")
-        elseif not buff.reminderOnly then
+        else
             button:SetAttribute("type", "spell")
             button:SetAttribute("spell", buff.name)
             button:SetAttribute("unit", "player")
@@ -211,11 +217,10 @@ local function Initialize()
         button:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.displayName or buff.name)
-            if buff.item then
+            if buff.key == "food" then
+                GameTooltip:AddLine("Click to eat. Remain seated for at least 10 seconds to gain Well Fed.", 1, 1, 1)
+            elseif buff.item then
                 GameTooltip:AddLine("Missing Intellect. Click to use this scroll on yourself.", 1, 1, 1)
-            elseif buff.reminderOnly then
-                GameTooltip:AddLine("Eat buff food from your bags until Well Fed appears.", 1, 1, 1)
-                GameTooltip:AddLine("Reminder only; this icon does not use food.", 1, 1, 1)
             else
                 GameTooltip:AddLine("Missing self-buff. Click to cast on yourself.", 1, 1, 1)
             end
@@ -248,8 +253,8 @@ SlashCmdList.BUFFED = function(message)
             .. ", dead/ghost: " .. tostring(UnitIsDeadOrGhost("player")))
         for _, buff in ipairs(buffs) do
             Print(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
-                .. (buff.item and (FindIntellectScroll() and ", scroll in bags" or ", no usable scroll")
-                    or (buff.reminderOnly and ", reminder only" or (Known(buff.name) and ", learned" or ", not learned")))
+                .. (buff.item and (FindConsumable(buff) and ", usable item in bags" or ", no supported usable item")
+                    or (Known(buff.name) and ", learned" or ", not learned"))
                 .. (HasBuff(active, buff) and ", active" or ", missing"))
         end
         return
