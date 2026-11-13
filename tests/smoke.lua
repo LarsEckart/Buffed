@@ -2,6 +2,8 @@
 local frames, active, learned = {}, {}, {}
 local combat, dead, mounted = false, false, false
 local bags, level = {}, 22
+local speed = 0
+function GetUnitSpeed(unit) assert(unit == "player"); return speed end
 local mutations = 0
 local function protectedMutation()
     assert(not combat, "secure frame mutated in combat")
@@ -130,6 +132,34 @@ bags[0] = { 2681 }
 event("BAG_UPDATE_DELAYED")
 assert(food.shown and food.item == "item:2681" and food.type == "item" and food.unit == "player")
 assert(food.icon.SetTextureArgs[1] == 102681)
+bags[0] = { 2681, 2290 }
+event("BAG_UPDATE_DELAYED")
+event("PLAYER_STARTED_MOVING")
+assert(not food.shown and fortitude.shown and intellect.shown, "only food hides while moving")
+event("BAG_UPDATE_DELAYED")
+assert(not food.shown, "other refreshes must preserve movement suppression")
+event("PLAYER_STOPPED_MOVING")
+assert(food.shown, "food should return immediately when stopping")
+speed = 7
+event("PLAYER_ENTERING_WORLD")
+assert(not food.shown, "reload/world entry while moving should hide food")
+speed = 0
+event("PLAYER_ENTERING_WORLD")
+assert(food.shown)
+combat = true
+before = mutations
+event("PLAYER_STARTED_MOVING")
+assert(mutations == before, "movement must not mutate secure buttons in combat")
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(not food.shown, "movement begun during combat should persist after combat")
+combat = true
+before = mutations
+event("PLAYER_STOPPED_MOVING")
+assert(mutations == before, "stopping in combat must not mutate secure buttons")
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(food.shown, "stopping during combat should allow food after combat")
 active = { "Well Fed" }
 event("UNIT_AURA", "player")
 assert(food.shown, "non-XP Well Fed must not hide the XP reminder")

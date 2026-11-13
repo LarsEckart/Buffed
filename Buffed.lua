@@ -13,6 +13,7 @@ local buffs = {
 
 local events = CreateFrame("Frame")
 local anchor, initialized
+local moving = false
 local buttons = {}
 
 local function Print(message)
@@ -208,7 +209,7 @@ local function Refresh()
             button.displayName = item and item.name or buff.name
         end
         local missing = BuffedDB.enabled[buff.key] and available and not HasBuff(active, buff)
-        if missing and not suppressed then
+        if missing and not suppressed and not (buff.key == "food" and moving) then
             button:ClearAllPoints()
             button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", visible * 42, -4)
             button.icon:SetTexture(item and ItemTexture(item.id, buff.icon) or buff.icon or SpellTexture(buff.name) or 136243)
@@ -302,7 +303,7 @@ SlashCmdList.BUFFED = function(message)
     if command == "status" then
         local active = ActiveBuffs()
         Print("Combat: " .. tostring(InCombatLockdown()) .. ", mounted: " .. tostring(IsMounted())
-            .. ", dead/ghost: " .. tostring(UnitIsDeadOrGhost("player")))
+            .. ", dead/ghost: " .. tostring(UnitIsDeadOrGhost("player")) .. ", moving: " .. tostring(moving))
         for _, buff in ipairs(buffs) do
             Print(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
                 .. (buff.item and (FindConsumable(buff) and ", usable item in bags" or ", no supported usable item")
@@ -346,7 +347,17 @@ events:RegisterEvent("PLAYER_ALIVE")
 events:RegisterEvent("PLAYER_DEAD")
 events:RegisterEvent("PLAYER_UNGHOST")
 events:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+events:RegisterEvent("PLAYER_STARTED_MOVING")
+events:RegisterEvent("PLAYER_STOPPED_MOVING")
 events:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_AURA" and unit ~= "player" then return end
+    -- Track transitions even in combat, without touching secure frames there.
+    -- Events are authoritative: speed can still reflect the previous state
+    -- during the movement callback. Sample it only on login/world entry.
+    if event == "PLAYER_STARTED_MOVING" then moving = true
+    elseif event == "PLAYER_STOPPED_MOVING" then moving = false
+    elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+        moving = GetUnitSpeed("player") > 0
+    end
     if not initialized then Initialize() else Refresh() end
 end)

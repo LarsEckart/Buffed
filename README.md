@@ -19,7 +19,9 @@ Original implementation inspired by BuffCheck; no external libraries required.
   Intellect is missing. Click to use it on yourself. Supports classic ranks
   I–IV (required levels 5/20/35/50) and picks the highest usable rank;
   Arcane Intellect/Brilliance also hide it.
-- Hidden during combat, while dead/ghost, or while mounted.
+- Hidden during combat, while dead/ghost, or while mounted. The food icon also
+  hides while moving and returns when you stop; other icons are unaffected.
+  Movement updates are event-driven, with no polling.
 - Position and enabled reminders are saved per character.
 
 No party/raid scanning, expiry warnings, general food detection, other consumable
@@ -50,7 +52,8 @@ Missing learned buffs appear near the center, slightly below your character.
 6. Carry supported XP food without Well Fed XP Boost: its icon should appear.
    Click to eat for at least 10 seconds: the icon should disappear once the XP
    buff appears. Plain Well Fed must not hide it. Removing the last supported,
-   usable food from your bags should also hide the icon.
+   usable food from your bags should also hide the icon. Start moving: only the
+   food icon should hide. Stop moving: it should return if the XP buff is missing.
 7. Carry a usable Scroll of Intellect without an Intellect buff: its icon should
    appear. Click it with another unit targeted: it should buff you and disappear.
    Removing the last scroll from your bags should also hide the icon.
