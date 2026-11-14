@@ -2,7 +2,7 @@
 ## Title: Buffed
 ## Notes: Small, English-only priest self-buff reminders for WoW Forever.
 ## Author: Buffed
-## Version: 0.1.0
+## Version: dev
 ## SavedVariablesPerCharacter: BuffedDB
 
 Buffed.lua

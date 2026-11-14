@@ -210,4 +210,32 @@ prove the real client works. Ask the user to `/reload` and test in-game; use
 `/buffed status` for diagnostics. Lua error reporting can be enabled with
 `/console scriptErrors 1` followed by `/reload`.
 
+## Versioning and releases
+
+Releases use an integer from `github.run_number` in
+`.github/workflows/release.yml`. No manual version bumps or Lua version constant
+are needed. The repository's `Buffed.toc` says `dev`; packaging writes the run
+number into the archived TOC only, without modifying or committing source files.
+
+The workflow is manually triggered via **Actions → Release → Run workflow**.
+Run 12 creates tag/release `v12` at the selected commit and `Buffed-v12.zip`, with
+generated release notes. Failed runs can leave gaps. Reruns keep their number;
+if a release already exists, creation fails rather than overwriting it. Run a
+new workflow to publish another release. Keep this workflow's identity stable
+so its run numbering continues.
+
+The ZIP contains a top-level `Buffed/` folder with only `Buffed.toc`, `Buffed.lua`,
+and `README.md`; developer files are excluded. Packaging uses Python's standard
+library on the GitHub runner. The repository needs Actions enabled and
+`contents: write` access. The manual workflow must be present on the default
+branch before GitHub offers its Run workflow button.
+
+Release procedure (only when explicitly requested):
+
+1. Validate, commit, and push the intended release changes.
+2. In GitHub Actions, run **Release**, selecting the intended branch.
+3. Check the workflow, generated release, and ZIP. Extracting it into
+   `Interface/AddOns` should produce `Interface/AddOns/Buffed/Buffed.toc` without
+   extra nesting, and the archived TOC should show the release number.
+
 Only commit or push when asked. Report whether changes were committed or pushed.

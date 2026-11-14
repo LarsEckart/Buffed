@@ -4,8 +4,9 @@ Clickable self-buff reminders for priests in **WoW Forever** (English client).
 
 ## Setup
 
-Place the `Buffed` folder in `Interface/AddOns`, enable it in the AddOns list,
-then log in or `/reload`. Missing buffs appear near the center of your screen.
+Download the ZIP from [Releases](https://github.com/LarsEckart/Buffed/releases)
+and extract its `Buffed` folder into `Interface/AddOns`. Enable it in the AddOns
+list, then log in or `/reload`. Missing buffs appear near the center of your screen.
 Click an icon to buff yourself, even with another unit targeted.
 
 ## Reminders
