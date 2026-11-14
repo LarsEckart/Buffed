@@ -1,18 +1,22 @@
 local _, class = UnitClass("player")
 if class ~= "PRIEST" then return end
 
--- Names intentionally target the English client. Group prayers satisfy the
--- same requirement, but reminders cast the single-target spell on yourself.
+-- Aura IDs verified at https://nether.wowhead.com/forever/tooltip/spell/{ID}
+-- (each listed rank checked; verification details in AGENTS.md).
+-- English names remain for spellbook/casting and aura APIs without spell IDs.
+-- Group prayers satisfy the requirement; buttons cast single-target spells.
 local buffs = {
-    { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude" },
-    { key = "fire", name = "Inner Fire" },
-    { key = "shadowguard", name = "Shadowguard" },
+    { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude",
+        auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
+    { key = "fire", name = "Inner Fire", auraIDs = { 588, 7128, 602, 1006, 10951, 10952 } },
+    { key = "shadowguard", name = "Shadowguard", auraIDs = { 18137, 19308, 19309, 19310, 19311, 19312 } },
     -- XP effect: https://nether.wowhead.com/forever/tooltip/spell/1243969
     -- Client-observed Well Fed aura includes that XP effect in buffspells:
     -- https://nether.wowhead.com/forever/tooltip/spell/1248422
-    { key = "food", name = "Well Fed XP Boost", spellID = 1243969, alternateSpellID = 1248422,
+    { key = "food", name = "Well Fed XP Boost", auraIDs = { 1243969, 1248422 },
         item = true, icon = "Interface\\Icons\\INV_Misc_Food_18" },
-    { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance" },
+    { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance",
+        auraIDs = { 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 } },
 }
 
 local events = CreateFrame("Frame")
@@ -110,8 +114,10 @@ local function ActiveBuffs()
             name, spellID = aura[1], aura[10]
         end
         if not name then break end
-        active[name] = true
-        if spellID then active[spellID] = true end
+        -- Prefer verified IDs. Only fall back to names if the API omits the ID;
+        -- an unknown ID with a familiar name must not silently count as verified.
+        if spellID then active[spellID] = true
+        else active[name] = true end
         details[#details + 1] = name .. " (spell ID: " .. tostring(spellID or "unavailable") .. ")"
     end
     cachedActive, cachedDetails = active, details
@@ -211,8 +217,10 @@ local function ItemTexture(id, fallback)
 end
 
 local function HasBuff(active, buff)
-    return active[buff.spellID] or active[buff.alternateSpellID]
-        or active[buff.name] or active[buff.alternate] or active[buff.other]
+    for _, id in ipairs(buff.auraIDs) do
+        if active[id] then return true end
+    end
+    return active[buff.name] or active[buff.alternate] or active[buff.other]
 end
 
 local function RestorePosition()

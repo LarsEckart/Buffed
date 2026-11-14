@@ -145,6 +145,25 @@ end
 active = { "Prayer of Fortitude", "Inner Fire" }
 event("UNIT_AURA", "player")
 assert(not fortitude.shown and not fire.shown, "active buffs should hide")
+-- IDs, not English names, identify every verified priest rank and prayer.
+learned["Shadowguard"] = true
+for _, group in ipairs({
+    { button = fortitude, ids = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
+    { button = fire, ids = { 588, 7128, 602, 1006, 10951, 10952 } },
+    { button = guard, ids = { 18137, 19308, 19309, 19310, 19311, 19312 } },
+}) do
+    for _, id in ipairs(group.ids) do
+        active = { { name = "Not an English spell name", spellId = id } }
+        event("UNIT_AURA", "player")
+        assert(not group.button.shown, "verified priest aura ID must count: " .. id)
+    end
+end
+active = { { name = "Power Word: Fortitude", spellId = 1 }, { name = "Inner Fire", spellId = 2 } }
+event("UNIT_AURA", "player")
+assert(fortitude.shown and fire.shown, "unknown IDs must not match by English name")
+learned["Shadowguard"] = nil
+active = { "Prayer of Fortitude", "Inner Fire" }
+event("UNIT_AURA", "player")
 active = {}
 event("UNIT_AURA", "target")
 assert(not fortitude.shown, "other units should not refresh")
@@ -325,6 +344,14 @@ for _, name in ipairs({ "Intellect", "Arcane Intellect", "Arcane Brilliance" }) 
     event("UNIT_AURA", "player")
     assert(not intellect.shown)
 end
+for _, id in ipairs({ 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 }) do
+    active = { { name = "Not an English spell name", spellId = id } }
+    event("UNIT_AURA", "player")
+    assert(not intellect.shown, "verified Intellect aura ID must count: " .. id)
+end
+active = { { name = "Arcane Intellect", spellId = 1 } }
+event("UNIT_AURA", "player")
+assert(intellect.shown, "unknown Intellect IDs must not match by name")
 active = {}
 event("UNIT_AURA", "player")
 assert(intellect.shown)

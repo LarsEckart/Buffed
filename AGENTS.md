@@ -135,8 +135,12 @@ Keep `README.md` concise and end-user focused. Developer details, API caveats,
 data sources, and test procedures belong here or beside the relevant code.
 
 - Original implementation inspired by BuffCheck; no external libraries required.
-- XP detection recognizes Well Fed XP Boost by name or spell ID `1243969`,
-  plus client-observed Well Fed aura `1248422`. Wowhead Forever's `buffspells`
+- Aura detection prefers the verified IDs below. English-name fallback is used
+  only when the aura API returns no spell ID. An unknown ID does not count just
+  because its name matches. English names remain necessary for learned-spell
+  detection, spell textures, and secure casting; this is not localization support.
+- XP detection recognizes spell ID `1243969`, plus client-observed Well Fed aura
+  `1248422` (or the Well Fed XP Boost name if no ID is available). Wowhead Forever's `buffspells`
   confirms that this specific Well Fed aura includes the 5% XP effect. Other
   XP-bearing Well Fed IDs remain unverified; do not generalize to all Well Fed.
   Sources:
@@ -164,6 +168,40 @@ data sources, and test procedures belong here or beside the relevant code.
   detection, consumables beyond XP food and Intellect scrolls, a minimap button,
   and an options panel. Other classes do nothing.
 
+### Verified aura IDs
+
+Each ID below was individually checked using Wowhead's Forever tooltip endpoint
+`https://nether.wowhead.com/forever/tooltip/spell/{ID}`. For example:
+https://nether.wowhead.com/forever/tooltip/spell/1243
+https://nether.wowhead.com/forever/tooltip/spell/12176
+
+| Effect | Verified IDs |
+| --- | --- |
+| Power Word: Fortitude | 1243, 1244, 1245, 2791, 10937, 10938 |
+| Prayer of Fortitude | 21562, 21564 |
+| Inner Fire | 588, 7128, 602, 1006, 10951, 10952 |
+| Shadowguard | 18137, 19308, 19309, 19310, 19311, 19312 |
+| Scroll Intellect | 8096, 8097, 8098, 12176 |
+| Arcane Intellect | 1459, 1460, 1461, 10156, 10157 |
+| Arcane Brilliance | 23028 |
+| XP food | 1243969, 1248422 |
+
+The spell tooltips confirm English names, buff text, effects, durations, and
+required spell levels for the listed ranks. Fortitude/Prayer and mage Intellect
+last 1 hour; Inner Fire lasts 10 minutes/20 charges; Shadowguard lasts 10
+minutes/3 charges; scroll Intellect lasts 30 minutes. Shadowguard's cast and buff
+tooltips disagree on damage amounts; no damage values are encoded or relied on.
+The scroll spell-level fields differ from item-use requirements: the item
+endpoints for 955/2290/4419/10308 link to 8096/8097/8098/12176 respectively and
+confirm character use levels 5/20/35/50. Source example:
+https://nether.wowhead.com/forever/tooltip/item/10308
+
+These checks establish the listed database entries, not that no additional
+Forever ranks/variants exist, nor which IDs the actual client returns. Unknown
+IDs require an out-of-combat `/buffed status` report and verification before
+adding them. No stacking/replacement rules were changed. Casting and learned
+spell detection are deliberately unchanged pending separate API verification.
+
 ## In-game smoke test
 
 Mock tests do not verify Forever's actual aura APIs, frame protection,
@@ -171,7 +209,11 @@ spellbook, or secure-click behavior. Validate these in the client:
 
 1. On a priest, remove Inner Fire: its icon should appear. Click with another
    unit targeted: it should buff yourself and disappear.
-2. Apply Prayer of Fortitude: no Fortitude reminder should appear.
+2. Apply Fortitude (try different learned ranks), Inner Fire, and Shadowguard:
+   each should hide its reminder. Apply Prayer of Fortitude: no Fortitude
+   reminder should appear. Check `/buffed status` for the actual aura IDs and
+   share it if a reminder stays visible. Test scroll Intellect, Arcane Intellect,
+   and Arcane Brilliance when available; each should hide the Intellect icon.
 3. Enter combat with a reminder visible: the bar should hide and return afterward.
 4. Enter combat with Shadowguard active, then spend its charges. The bar should
    stay hidden. Use `/buffed status` for the first time during that fight: the

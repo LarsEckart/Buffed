@@ -35,7 +35,7 @@ reminder settings are saved per character. Other classes are not supported.
 | `/buffed fortitude`, `fire`, `shadowguard`, `food`, or `intellect` | Toggle that reminder |
 | `/buffed status` | Show diagnostics in chat and a copy window |
 
-For troubleshooting, run `/buffed status`, press **Ctrl+C** to copy the selected
-text, and share it with your report. Press **Escape** to close the window.
+If a reminder stays visible after buffing, run `/buffed status`, press **Ctrl+C**
+to copy the selected text, and share it with your report. Press **Escape** to close the window.
 During combat, diagnostics show **cached, not live** information. If an error
 appears after combat, include that message too.
