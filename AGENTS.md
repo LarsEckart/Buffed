@@ -129,6 +129,67 @@ This is a community mirror of current Retail-generated documentation, **not**
 Forever-specific compatibility evidence. Use it as context; the actual Forever
 client error and in-game tests determine what this addon can safely do.
 
+## Implementation and data notes
+
+Keep `README.md` concise and end-user focused. Developer details, API caveats,
+data sources, and test procedures belong here or beside the relevant code.
+
+- Original implementation inspired by BuffCheck; no external libraries required.
+- XP detection recognizes Well Fed XP Boost by name or spell ID `1243969`,
+  plus client-observed Well Fed aura `1248422`. Wowhead Forever's `buffspells`
+  confirms that this specific Well Fed aura includes the 5% XP effect. Other
+  XP-bearing Well Fed IDs remain unverified; do not generalize to all Well Fed.
+  Sources:
+  https://nether.wowhead.com/forever/tooltip/spell/1243969
+  https://nether.wowhead.com/forever/tooltip/spell/1248422
+- The verified food allowlist is `consumables.food` in `Buffed.lua`; it is not
+  exhaustive. Selection prefers Roasted Boar Meat, then lower-level foods,
+  ignoring stat bonuses.
+- Scroll of Intellect supports ranks I–IV (required levels 5/20/35/50), selecting
+  the highest usable rank. Arcane Intellect/Brilliance also satisfy the reminder.
+- Initialization occurs on world entry, not login or earlier bag/spell events;
+  world entry in combat defers initialization until combat ends. Normal updates
+  skip aura, spellbook, and bag scans while dead/ghost or mounted. Relevant
+  events still hide icons and refresh them when those states end.
+- The status copy window is pre-created out of combat. Combat diagnostics use
+  only cached aura states/names/IDs, learned spells, and bag availability. If no
+  aura snapshot exists, report that rather than claiming buffs are missing.
+  Status includes the aura API used. Selected text can be copied with Ctrl+C;
+  addons cannot write directly to the system clipboard.
+- Event/command runtime errors are caught so a failed status command does not
+  abort chat submission. The first pending error is printed after combat (or
+  immediately out of combat), and retained in status until reload. Request the
+  `Runtime error (please share)` message if combat diagnostics fail to open.
+- Current scope excludes party/raid scanning, expiry warnings, general food
+  detection, consumables beyond XP food and Intellect scrolls, a minimap button,
+  and an options panel. Other classes do nothing.
+
+## In-game smoke test
+
+Mock tests do not verify Forever's actual aura APIs, frame protection,
+spellbook, or secure-click behavior. Validate these in the client:
+
+1. On a priest, remove Inner Fire: its icon should appear. Click with another
+   unit targeted: it should buff yourself and disappear.
+2. Apply Prayer of Fortitude: no Fortitude reminder should appear.
+3. Enter combat with a reminder visible: the bar should hide and return afterward.
+4. Enter combat with Shadowguard active, then spend its charges. The bar should
+   stay hidden. Use `/buffed status` for the first time during that fight: the
+   copy window should open and label its pre-combat aura snapshot cached.
+   Leave combat: the Shadowguard reminder should return and status update.
+   Repeat with movement and aura/bag/spell events; no secret-aura errors should
+   occur.
+5. Mount/dismount and die/resurrect: reminders should hide and return.
+6. Move the bar and toggle a reminder, then `/reload`: settings should persist.
+7. Carry supported usable XP food without its XP buff: the icon should appear.
+   Eat for at least 10 seconds: it should disappear once the XP buff appears.
+   Plain Well Fed must not hide it. Removing the last supported usable food
+   should hide it. Moving should hide only the food icon; stopping should
+   restore it if the XP buff is missing.
+8. Carry a usable Scroll of Intellect without an Intellect buff: its icon should
+   appear. Click with another unit targeted: it should buff yourself and
+   disappear. Removing the last scroll should also hide the icon.
+
 ## Validation and workflow
 
 Runtime files are `Buffed.toc` and `Buffed.lua`. Mock tests are in
