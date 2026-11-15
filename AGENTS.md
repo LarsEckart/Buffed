@@ -168,6 +168,30 @@ data sources, and test procedures belong here or beside the relevant code.
   detection, items beyond XP food, Intellect scrolls, and Cozy Sleeping Bag, a minimap button,
   and an options panel. Other classes do nothing.
 
+### Camp Benefits reminder
+
+- `/buffed camp` toggles an informational-only reminder for the umbrella aura
+  Camp Benefits (1229741), observed in the user's out-of-combat status report.
+  It does not depend on carried items or learned spells and has no secure action.
+- Verified name, icon, one-hour buff duration and bundled benefit descriptions:
+  https://nether.wowhead.com/forever/tooltip/spell/1229741
+  Individual benefits, scaling, acquisition and survival through death are not
+  inferred from the umbrella aura. No individual-benefit checks are implemented.
+- Uses the existing out-of-combat aura scan and combat-hidden parent. In-game:
+  `/reload`, check that the icon hides with Camp Benefits and returns without it;
+  clicking must do nothing. Verify `/buffed camp` and combat/mount/death hiding.
+
+### Dungeon suppression
+
+- User verified `/dump IsInInstance()` returns `true, "party"` inside a Forever
+  dungeon. Refresh suppresses only Camp Benefits and Cozy Sleeping Bag for that
+  result; no raid or other instance-type behavior is inferred.
+- Existing `PLAYER_ENTERING_WORLD` refreshes on entry/exit; combat transitions
+  defer scans and secure changes until combat ends. No polling is added.
+- In-game: carry the bag with both buffs missing, enter/leave a dungeon, and
+  confirm both reminders hide/return while other reminders remain unchanged.
+  Repeat a transition in combat and verify the result after combat ends.
+
 ### Cozy Sleeping Bag reminder
 
 - `sleepingbag` uses carried item 211527 (Cozy Sleeping Bag) and aura 429959

@@ -3,6 +3,8 @@ local frames, active, learned = {}, {}, {}
 local combat, dead, mounted = false, false, false
 local bags, level = {}, 22
 local speed = 0
+local inInstance, instanceType = false, "none"
+function IsInInstance() return inInstance, instanceType end
 function GetUnitSpeed(unit) assert(unit == "player"); return speed end
 local mutations, scans = 0, 0
 local function recordScan()
@@ -280,6 +282,69 @@ assert(not sleepingbag.shown)
 active, bags[0] = {}, {}
 event("BAG_UPDATE_DELAYED")
 assert(not sleepingbag.shown and sleepingbag.item == nil, "no bag means no reminder")
+
+-- Camp Benefits is an unconditional informational reminder, not a cast/item.
+local camp
+for _, frame in ipairs(frames) do
+    if frame.icon and frame.icon.SetTextureArgs
+        and frame.icon.SetTextureArgs[1] == "Interface\\Icons\\inv_camelot_camping_campbenefits" then
+        camp = frame
+    end
+end
+assert(camp and camp.shown and BuffedDB.enabled.camp)
+assert(camp.type == nil and camp.spell == nil and camp.item == nil)
+active = { { name = "Camp Benefits", spellId = 1229741 } }
+event("UNIT_AURA", "player")
+assert(not camp.shown)
+active = { { name = "Camp Benefits", spellId = 1 } }
+event("UNIT_AURA", "player")
+assert(camp.shown, "unverified IDs must not satisfy camp reminder")
+active = { "Camp Benefits" }
+event("UNIT_AURA", "player")
+assert(not camp.shown)
+active = {}
+event("UNIT_AURA", "player")
+assert(camp.shown)
+SlashCmdList.BUFFED("camp")
+assert(not camp.shown and not BuffedDB.enabled.camp)
+SlashCmdList.BUFFED("camp")
+assert(camp.shown)
+SlashCmdList.BUFFED("status")
+assert(combatStatusBox.SetTextArgs[1]:find("Camp Benefits: on, reminder only, missing", 1, true))
+combatStatusBox.OnEscapePressed()
+
+-- World entry updates dungeon suppression; other reminders remain available.
+bags[0] = { 211527, 2681, 2290 }
+event("BAG_UPDATE_DELAYED")
+assert(camp.shown and sleepingbag.shown)
+inInstance, instanceType = true, "party"
+event("PLAYER_ENTERING_WORLD")
+assert(not camp.shown and not sleepingbag.shown, "camp and bag must hide in dungeons")
+assert(fortitude.shown and food.shown and intellect.shown, "other reminders must remain unchanged")
+event("UNIT_AURA", "player")
+assert(not camp.shown and not sleepingbag.shown, "normal refreshes must preserve suppression")
+inInstance, instanceType = false, "none"
+event("PLAYER_ENTERING_WORLD")
+assert(camp.shown and sleepingbag.shown, "missing reminders return outside dungeons")
+-- Dungeon transitions in combat defer all scans and secure mutations.
+combat = true
+local beforeDungeonMutations, beforeDungeonScans = mutations, scans
+inInstance, instanceType = true, "party"
+event("PLAYER_ENTERING_WORLD")
+assert(mutations == beforeDungeonMutations and scans == beforeDungeonScans)
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(not camp.shown and not sleepingbag.shown)
+combat = true
+beforeDungeonMutations, beforeDungeonScans = mutations, scans
+inInstance, instanceType = false, "none"
+event("PLAYER_ENTERING_WORLD")
+assert(mutations == beforeDungeonMutations and scans == beforeDungeonScans)
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(camp.shown and sleepingbag.shown)
+bags[0] = {}
+event("BAG_UPDATE_DELAYED")
 
 assert(BuffedDB.enabled.food and not food.shown)
 bags[0] = { 2681 }

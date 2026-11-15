@@ -6,6 +6,10 @@ if class ~= "PRIEST" then return end
 -- English names remain for spellbook/casting and aura APIs without spell IDs.
 -- Group prayers satisfy the requirement; buttons cast single-target spells.
 local buffs = {
+    -- Umbrella aura only; individual camp benefits are not checked.
+    -- https://nether.wowhead.com/forever/tooltip/spell/1229741
+    { key = "camp", name = "Camp Benefits", auraIDs = { 1229741 }, reminderOnly = true,
+        icon = "Interface\\Icons\\inv_camelot_camping_campbenefits" },
     { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude",
         auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
     { key = "fire", name = "Inner Fire", auraIDs = { 588, 7128, 602, 1006, 10951, 10952 } },
@@ -253,12 +257,16 @@ local function Refresh()
         return
     end
     local active = ActiveBuffs()
+    -- User verified IsInInstance() returns true, "party" inside a Forever dungeon.
+    local inInstance, instanceType = IsInInstance()
+    local inDungeon = inInstance and instanceType == "party"
     local visible = 0
     for i, buff in ipairs(buffs) do
         local button = buttons[i]
         local item = buff.item and FindConsumable(buff)
         local available
-        if buff.item then available = item ~= nil
+        if buff.reminderOnly then available = true
+        elseif buff.item then available = item ~= nil
         else available = not not Known(buff.name) end
         availability[buff.key] = available
         if buff.item then
@@ -266,7 +274,8 @@ local function Refresh()
             button.displayName = item and item.name or buff.name
         end
         local missing = BuffedDB.enabled[buff.key] and available and not HasBuff(active, buff)
-        if missing and not (buff.key == "food" and moving) then
+        local dungeonSuppressed = inDungeon and (buff.key == "camp" or buff.key == "sleepingbag")
+        if missing and not dungeonSuppressed and not (buff.key == "food" and moving) then
             button:ClearAllPoints()
             button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", visible * 42, -4)
             button.icon:SetTexture(item and ItemTexture(item.id, buff.icon) or buff.icon or SpellTexture(buff.name) or 136243)
@@ -314,7 +323,9 @@ local function Initialize()
         local button = CreateFrame("Button", "BuffedButton" .. i, anchor, "SecureActionButtonTemplate")
         button:SetSize(36, 36)
         button:RegisterForClicks("AnyUp", "AnyDown")
-        if buff.item then
+        if buff.reminderOnly then
+            -- No secure action: this is an informational reminder, not a cast.
+        elseif buff.item then
             button:SetAttribute("type", "item")
             button:SetAttribute("unit", "player")
         else
@@ -328,7 +339,9 @@ local function Initialize()
         button:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.displayName or buff.name)
-            if buff.key == "food" then
+            if buff.reminderOnly then
+                GameTooltip:AddLine("Camp Benefits missing. Visit a camp to refresh it. This icon is not clickable.", 1, 1, 1)
+            elseif buff.key == "food" then
                 GameTooltip:AddLine("Click to eat. Remain seated for at least 10 seconds for +5% kill XP.", 1, 1, 1)
             elseif buff.key == "sleepingbag" then
                 GameTooltip:AddLine("Click to unroll. Rest inside for at least one minute to gain Well-Rested.", 1, 1, 1)
@@ -396,7 +409,7 @@ local function HandleCommand(message)
     local command = message:lower():match("^%s*(.-)%s*$")
     if command == "" or command == "help" then
         Print("/buffed unlock | lock | reset | status")
-        Print("Toggle a reminder: /buffed fortitude | fire | shadowguard | food | intellect | sleepingbag")
+        Print("Toggle a reminder: /buffed fortitude | fire | shadowguard | food | intellect | sleepingbag | camp")
         return
     end
     if command == "status" then
@@ -417,13 +430,15 @@ local function HandleCommand(message)
         for _, buff in ipairs(buffs) do
             local available = availability[buff.key]
             if not InCombatLockdown() then
-                if buff.item then available = FindConsumable(buff) ~= nil
+                if buff.reminderOnly then available = true
+                elseif buff.item then available = FindConsumable(buff) ~= nil
                 else available = not not Known(buff.name) end
                 availability[buff.key] = available
             end
             AddLine(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
                 .. (available == nil and ", availability/learned state unknown"
-                    or (buff.item and (available and ", usable item in bags" or ", no supported usable item")
+                    or (buff.reminderOnly and ", reminder only"
+                        or buff.item and (available and ", usable item in bags" or ", no supported usable item")
                         or (available and ", learned" or ", not learned")))
                 .. (not hasAuraSnapshot and ", aura unknown"
                     or (HasBuff(active, buff) and ", active" or ", missing")))

@@ -7,9 +7,14 @@ Clickable self-buff reminders for priests in **WoW Forever** (English client).
 Download the ZIP from [Releases](https://github.com/LarsEckart/Buffed/releases)
 and extract its `Buffed` folder into `Interface/AddOns`. Enable it in the AddOns
 list, then log in or `/reload`. Missing buffs appear near the center of your screen.
-Click an icon to buff yourself, even with another unit targeted.
+Click a spell or item icon to buff yourself, even with another unit targeted.
+Camp Benefits is an informational reminder only.
 
 ## Reminders
+
+- **Camp Benefits** — appears when the umbrella buff is missing, regardless of
+  carried items. This icon cannot refresh the buff; visit a camp. Individual
+  camp benefits are not checked.
 
 - **Power Word: Fortitude, Inner Fire, and Shadowguard** — only learned spells
   appear; equivalent prayer buffs also count.
@@ -24,8 +29,9 @@ Click an icon to buff yourself, even with another unit targeted.
   Well-Rested hides the reminder.
 
 Reminders hide during combat, while mounted, or while dead, and refresh when
-these states end. The food reminder also hides while moving. Position and
-reminder settings are saved per character. Other classes are not supported.
+these states end. Camp Benefits and Cozy Sleeping Bag also hide inside dungeons.
+The food reminder also hides while moving. Position and reminder settings are
+saved per character. Other classes are not supported.
 
 ## Commands
 
@@ -35,7 +41,7 @@ reminder settings are saved per character. Other classes are not supported.
 | `/buffed unlock` | Drag the **Buffed** label to move the bar |
 | `/buffed lock` | Lock the bar |
 | `/buffed reset` | Reset its position |
-| `/buffed fortitude`, `fire`, `shadowguard`, `food`, `intellect`, or `sleepingbag` | Toggle that reminder |
+| `/buffed fortitude`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, or `camp` | Toggle that reminder |
 | `/buffed status` | Show diagnostics in chat and a copy window |
 
 If a reminder stays visible after buffing, run `/buffed status`, press **Ctrl+C**
