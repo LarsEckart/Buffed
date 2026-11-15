@@ -165,8 +165,27 @@ data sources, and test procedures belong here or beside the relevant code.
   immediately out of combat), and retained in status until reload. Request the
   `Runtime error (please share)` message if combat diagnostics fail to open.
 - Current scope excludes party/raid scanning, expiry warnings, general food
-  detection, consumables beyond XP food and Intellect scrolls, a minimap button,
+  detection, items beyond XP food, Intellect scrolls, and Cozy Sleeping Bag, a minimap button,
   and an options panel. Other classes do nothing.
+
+### Cozy Sleeping Bag reminder
+
+- `sleepingbag` uses carried item 211527 (Cozy Sleeping Bag) and aura 429959
+  (Well-Rested), observed by the user at one stack. Any stack hides the reminder;
+  stack counts, cooldowns, and progress toward three stacks are not tracked.
+- Verified Forever sources:
+  https://nether.wowhead.com/forever/tooltip/item/211527
+  https://nether.wowhead.com/forever/tooltip/spell/429961
+  https://nether.wowhead.com/forever/tooltip/spell/429959
+- Item tooltip lists no character-level requirement (item level 40 is not a use
+  requirement). Unroll Bag has a 15-second cast and one-hour cooldown; the tooltip
+  says resting inside for at least one minute grants XP benefits, up to three
+  stacks. Well-Rested lists +1% experience gains and a two-hour duration.
+- Uses existing out-of-combat aura and secure item-button paths. Actual unrolling
+  via this button still needs an in-game test. Carry the bag without Well-Rested,
+  click to unroll, and rest until one stack appears: the icon should disappear.
+  Remove Well-Rested to restore it; remove the bag to hide it. Check the
+  `/buffed sleepingbag` toggle and confirm normal combat suppression.
 
 ### Verified aura IDs
 

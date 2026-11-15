@@ -15,6 +15,9 @@ local buffs = {
     -- https://nether.wowhead.com/forever/tooltip/spell/1248422
     { key = "food", name = "Well Fed XP Boost", auraIDs = { 1243969, 1248422 },
         item = true, icon = "Interface\\Icons\\INV_Misc_Food_18" },
+    -- Client-observed; verified: https://nether.wowhead.com/forever/tooltip/spell/429959
+    { key = "sleepingbag", name = "Well-Rested", auraIDs = { 429959 },
+        item = true, icon = "Interface\\Icons\\INV_Misc_Bag_BigBagofEnchantments" },
     { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance",
         auraIDs = { 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 } },
 }
@@ -131,6 +134,12 @@ end
 -- Prefer Roasted Boar Meat, then low-level foods; stat bonuses are irrelevant.
 -- This is a verified allowlist, not an exhaustive list of Forever foods.
 local consumables = {
+    -- No character-level requirement listed (item level 40 is not a use level).
+    -- https://nether.wowhead.com/forever/tooltip/item/211527
+    -- https://nether.wowhead.com/forever/tooltip/spell/429961
+    sleepingbag = {
+        { id = 211527, level = 1, name = "Cozy Sleeping Bag" },
+    },
     food = {
         { id = 2681, level = 1, name = "Roasted Boar Meat" },
         { id = 2680, level = 1, name = "Spiced Wolf Meat" },
@@ -284,7 +293,7 @@ local function Initialize()
     end
 
     anchor = CreateFrame("Frame", "BuffedAnchor", UIParent, "SecureHandlerStateTemplate")
-    anchor:SetSize(206, 20)
+    anchor:SetSize(#buffs * 42 - 4, 20)
     anchor:SetMovable(true)
     anchor:SetClampedToScreen(true)
     anchor:RegisterForDrag("LeftButton")
@@ -321,6 +330,8 @@ local function Initialize()
             GameTooltip:SetText(self.displayName or buff.name)
             if buff.key == "food" then
                 GameTooltip:AddLine("Click to eat. Remain seated for at least 10 seconds for +5% kill XP.", 1, 1, 1)
+            elseif buff.key == "sleepingbag" then
+                GameTooltip:AddLine("Click to unroll. Rest inside for at least one minute to gain Well-Rested.", 1, 1, 1)
             elseif buff.item then
                 GameTooltip:AddLine("Missing Intellect. Click to use this scroll on yourself.", 1, 1, 1)
             else
@@ -385,7 +396,7 @@ local function HandleCommand(message)
     local command = message:lower():match("^%s*(.-)%s*$")
     if command == "" or command == "help" then
         Print("/buffed unlock | lock | reset | status")
-        Print("Toggle a reminder: /buffed fortitude | fire | shadowguard | food | intellect")
+        Print("Toggle a reminder: /buffed fortitude | fire | shadowguard | food | intellect | sleepingbag")
         return
     end
     if command == "status" then

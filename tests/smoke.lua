@@ -241,6 +241,46 @@ assert(guard.shown, "depleted Shadowguard should reappear")
 SlashCmdList.BUFFED("shadowguard")
 assert(not guard.shown)
 
+-- Sleeping bag ownership and any Well-Rested stack use the normal item path.
+assert(BuffedDB.enabled.sleepingbag)
+bags[0] = { 211527 }
+event("BAG_UPDATE_DELAYED")
+local sleepingbag
+for _, frame in ipairs(frames) do
+    if frame.item == "item:211527" then sleepingbag = frame end
+end
+assert(sleepingbag and sleepingbag.shown and sleepingbag.type == "item")
+assert(sleepingbag.icon.SetTextureArgs[1] == 311527)
+for _, stacks in ipairs({ 1, 2, 3 }) do
+    active = { { name = "Well-Rested", spellId = 429959, applications = stacks } }
+    event("UNIT_AURA", "player")
+    assert(not sleepingbag.shown, "any Well-Rested stack should hide the bag")
+end
+active = { { name = "Well-Rested", spellId = 1 } }
+event("UNIT_AURA", "player")
+assert(sleepingbag.shown, "unknown Well-Rested IDs must not match by name")
+active = { "Well-Rested" }
+event("UNIT_AURA", "player")
+assert(not sleepingbag.shown, "name fallback applies only without an ID")
+active = {}
+event("UNIT_AURA", "player")
+assert(sleepingbag.shown)
+SlashCmdList.BUFFED("sleepingbag")
+assert(not sleepingbag.shown and not BuffedDB.enabled.sleepingbag)
+SlashCmdList.BUFFED("sleepingbag")
+assert(sleepingbag.shown)
+combat = true
+before = mutations
+active = { { name = "Well-Rested", spellId = 429959 } }
+event("UNIT_AURA", "player")
+assert(mutations == before)
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(not sleepingbag.shown)
+active, bags[0] = {}, {}
+event("BAG_UPDATE_DELAYED")
+assert(not sleepingbag.shown and sleepingbag.item == nil, "no bag means no reminder")
+
 assert(BuffedDB.enabled.food and not food.shown)
 bags[0] = { 2681 }
 event("BAG_UPDATE_DELAYED")

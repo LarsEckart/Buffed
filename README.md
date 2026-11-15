@@ -19,6 +19,9 @@ Click an icon to buff yourself, even with another unit targeted.
   Meat, Crab Cake, Strider Stew, Smoked Sagefish, and Roast Raptor.
 - **Scroll of Intellect** — uses your highest usable rank (I–IV); hidden when
   you already have Intellect or Arcane Brilliance.
+- **Cozy Sleeping Bag** — appears when you carry the bag and lack Well-Rested.
+  Click to unroll, then rest inside for at least one minute. Any stack of
+  Well-Rested hides the reminder.
 
 Reminders hide during combat, while mounted, or while dead, and refresh when
 these states end. The food reminder also hides while moving. Position and
@@ -32,7 +35,7 @@ reminder settings are saved per character. Other classes are not supported.
 | `/buffed unlock` | Drag the **Buffed** label to move the bar |
 | `/buffed lock` | Lock the bar |
 | `/buffed reset` | Reset its position |
-| `/buffed fortitude`, `fire`, `shadowguard`, `food`, or `intellect` | Toggle that reminder |
+| `/buffed fortitude`, `fire`, `shadowguard`, `food`, `intellect`, or `sleepingbag` | Toggle that reminder |
 | `/buffed status` | Show diagnostics in chat and a copy window |
 
 If a reminder stays visible after buffing, run `/buffed status`, press **Ctrl+C**
