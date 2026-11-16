@@ -201,7 +201,8 @@ assert(guard.shown and guard.unit == "player" and BuffedDB.enabled.shadowguard)
 active = { "Shadowguard" }
 event("UNIT_AURA", "player")
 assert(not guard.shown)
-combat = true
+-- Reproduce combat entry arriving before InCombatLockdown becomes true.
+combat = false
 before = mutations
 local scansBeforeCombat = scans
 local readBuffBeforeCombat = C_UnitAuras.GetBuffDataByIndex
@@ -391,6 +392,12 @@ assert(not food.shown, "XP aura ID must satisfy food even when the client name d
 active = { { name = "Well Fed", spellId = 1248422 } }
 event("UNIT_AURA", "player")
 assert(not food.shown, "client-observed Well Fed includes the verified XP effect")
+for _, id in ipairs({ 1248406, 1248420, 1248421, 1248422, 1248688,
+    1249519, 1249520, 1249521, 1249523 }) do
+    active = { { name = "Well Fed", spellId = id } }
+    event("UNIT_AURA", "player")
+    assert(not food.shown, "verified XP-bearing Well Fed must hide food: " .. id)
+end
 event("PLAYER_STARTED_MOVING")
 event("PLAYER_STOPPED_MOVING")
 assert(not food.shown, "standing still again must not restore food with the XP-bearing aura")

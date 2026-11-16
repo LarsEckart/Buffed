@@ -14,10 +14,12 @@ local buffs = {
         auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
     { key = "fire", name = "Inner Fire", auraIDs = { 588, 7128, 602, 1006, 10951, 10952 } },
     { key = "shadowguard", name = "Shadowguard", auraIDs = { 18137, 19308, 19309, 19310, 19311, 19312 } },
-    -- XP effect: https://nether.wowhead.com/forever/tooltip/spell/1243969
-    -- Client-observed Well Fed aura includes that XP effect in buffspells:
-    -- https://nether.wowhead.com/forever/tooltip/spell/1248422
-    { key = "food", name = "Well Fed XP Boost", auraIDs = { 1243969, 1248422 },
+    -- Each Well Fed ID's Forever buffspells explicitly includes +5% kill XP.
+    -- Sources: https://nether.wowhead.com/forever/tooltip/spell/{ID}
+    -- Full supported-food audit and mapping limitations: AGENTS.md.
+    { key = "food", name = "Well Fed XP Boost",
+        auraIDs = { 1243969, 1248406, 1248420, 1248421, 1248422, 1248688,
+            1249519, 1249520, 1249521, 1249523 },
         item = true, icon = "Interface\\Icons\\INV_Misc_Food_18" },
     -- Client-observed; verified: https://nether.wowhead.com/forever/tooltip/spell/429959
     { key = "sleepingbag", name = "Well-Rested", auraIDs = { 429959 },
@@ -29,6 +31,12 @@ local buffs = {
 local events = CreateFrame("Frame")
 local anchor, initialized
 local enteredWorld = false
+local combatEventActive = false
+local function CombatLocked()
+    -- Combat entry can precede the lockdown flag; block scans and secure
+    -- changes from the entry event until combat ends.
+    return combatEventActive or InCombatLockdown()
+end
 local moving = false
 local buttons = {}
 local availability = {}
@@ -49,7 +57,7 @@ local function RunSafely(context, callback, ...)
         end
         pendingRuntimeError = true
     end
-    if pendingRuntimeError and not InCombatLockdown() then
+    if pendingRuntimeError and not CombatLocked() then
         Print("Runtime error (please share): " .. lastRuntimeError)
         pendingRuntimeError = false
     end
@@ -108,7 +116,7 @@ end
 local function ActiveBuffs()
     -- Forever rejects aura access while secret in combat. Never call either
     -- aura API then; diagnostics may only use the last out-of-combat snapshot.
-    if InCombatLockdown() then return cachedActive, cachedDetails end
+    if CombatLocked() then return cachedActive, cachedDetails end
     local active, details = {}, {}
     for i = 1, 255 do
         local name, spellID
@@ -249,7 +257,7 @@ end
 local function Refresh()
     -- Never mutate secure buttons in combat. Their parent is hidden by a
     -- secure state driver, then we rebuild once combat ends.
-    if not initialized or InCombatLockdown() then return end
+    if not initialized or CombatLocked() then return end
     if UnitIsDeadOrGhost("player") or IsMounted() then
         for _, button in ipairs(buttons) do button:Hide() end
         anchor.label:SetShown(BuffedDB.unlocked)
@@ -292,7 +300,7 @@ end
 
 local function Initialize()
     if initialized then return end
-    if InCombatLockdown() then return end
+    if CombatLocked() then return end
     if type(BuffedDB) ~= "table" then BuffedDB = {} end
     if type(BuffedDB.enabled) ~= "table" then BuffedDB.enabled = {} end
     for _, buff in ipairs(buffs) do
@@ -307,7 +315,7 @@ local function Initialize()
     anchor:SetClampedToScreen(true)
     anchor:RegisterForDrag("LeftButton")
     anchor:SetScript("OnDragStart", function(self)
-        if BuffedDB.unlocked and not InCombatLockdown() then self:StartMoving() end
+        if BuffedDB.unlocked and not CombatLocked() then self:StartMoving() end
     end)
     anchor:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -420,16 +428,16 @@ local function HandleCommand(message)
             Print(line)
         end
         if lastRuntimeError then AddLine("Last runtime error: " .. lastRuntimeError) end
-        AddLine("Combat: " .. tostring(InCombatLockdown()) .. ", mounted: " .. tostring(IsMounted())
+        AddLine("Combat: " .. tostring(CombatLocked()) .. ", mounted: " .. tostring(IsMounted())
             .. ", dead/ghost: " .. tostring(UnitIsDeadOrGhost("player")) .. ", moving: " .. tostring(moving))
-        if InCombatLockdown() then
+        if CombatLocked() then
             AddLine("Combat aura access blocked by client; conditional combat reminders disabled.")
             AddLine("Aura states, item availability and learned spells below are cached, not live.")
             if not hasAuraSnapshot then AddLine("No out-of-combat aura snapshot available.") end
         end
         for _, buff in ipairs(buffs) do
             local available = availability[buff.key]
-            if not InCombatLockdown() then
+            if not CombatLocked() then
                 if buff.reminderOnly then available = true
                 elseif buff.item then available = FindConsumable(buff) ~= nil
                 else available = not not Known(buff.name) end
@@ -443,17 +451,17 @@ local function HandleCommand(message)
                 .. (not hasAuraSnapshot and ", aura unknown"
                     or (HasBuff(active, buff) and ", active" or ", missing")))
         end
-        AddLine((InCombatLockdown() and "Cached player buffs via " or "Player buffs via ")
+        AddLine((CombatLocked() and "Cached player buffs via " or "Player buffs via ")
             .. (C_UnitAuras and C_UnitAuras.GetBuffDataByIndex
             and "C_UnitAuras.GetBuffDataByIndex" or "UnitBuff") .. ":")
         if #details == 0 then
-            AddLine(InCombatLockdown() and "(none in cached snapshot)" or "(none returned)")
+            AddLine(CombatLocked() and "(none in cached snapshot)" or "(none returned)")
         end
         for _, detail in ipairs(details) do AddLine(detail) end
         ShowStatus(lines)
         return
     end
-    if InCombatLockdown() then
+    if CombatLocked() then
         Print("Settings cannot be changed during combat.")
         return
     end
@@ -495,6 +503,8 @@ events:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 events:RegisterEvent("PLAYER_STARTED_MOVING")
 events:RegisterEvent("PLAYER_STOPPED_MOVING")
 local function HandleEvent(_, event, unit)
+    if event == "PLAYER_REGEN_DISABLED" then combatEventActive = true
+    elseif event == "PLAYER_REGEN_ENABLED" then combatEventActive = false end
     if event == "PLAYER_ENTERING_WORLD" then
         enteredWorld = true
         moving = GetUnitSpeed("player") > 0
@@ -504,7 +514,7 @@ local function HandleEvent(_, event, unit)
     if not enteredWorld then return end
     if event == "UNIT_AURA" then
         -- Avoid inspecting restricted event payloads as well as the aura APIs.
-        if InCombatLockdown() then return end
+        if CombatLocked() then return end
         if unit ~= "player" then return end
     end
     -- Track transitions even in combat, without touching secure frames there.

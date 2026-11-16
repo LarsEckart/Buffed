@@ -139,13 +139,26 @@ data sources, and test procedures belong here or beside the relevant code.
   only when the aura API returns no spell ID. An unknown ID does not count just
   because its name matches. English names remain necessary for learned-spell
   detection, spell textures, and secure casting; this is not localization support.
-- XP detection recognizes spell ID `1243969`, plus client-observed Well Fed aura
-  `1248422` (or the Well Fed XP Boost name if no ID is available). Wowhead Forever's `buffspells`
-  confirms that this specific Well Fed aura includes the 5% XP effect. Other
-  XP-bearing Well Fed IDs remain unverified; do not generalize to all Well Fed.
-  Sources:
+- XP detection recognizes spell ID `1243969` and the nine individually verified
+  Well Fed IDs in the audit below (or Well Fed XP Boost by name if no ID exists).
+  Each one's Forever `buffspells` explicitly confirms +5% kill XP. Only
+  `1248422` and `1249519` have been observed in the user's client so far.
+  Do not generalize to unverified Well Fed IDs. Sources:
   https://nether.wowhead.com/forever/tooltip/spell/1243969
   https://nether.wowhead.com/forever/tooltip/spell/1248422
+  https://nether.wowhead.com/forever/tooltip/spell/1249519
+  https://nether.wowhead.com/forever/tooltip/item/6290
+  Smallfish's item tooltip confirms +5% kill XP after 10 seconds eating and
+  2 Attack Power for 15 minutes, without a character-level requirement.
+  The observed aura 1249519 lists 1 Attack Power and 15 minutes; its
+  `buffspells` explicitly includes 1243969's +5% kill XP. The stat discrepancy
+  is not resolved or relied on by selection/detection.
+- A user report showed aura access failing on `PLAYER_REGEN_DISABLED` despite
+  the lockdown guard. Combat entry now latches a conservative blocked state
+  until `PLAYER_REGEN_ENABLED`, in addition to checking `InCombatLockdown()`.
+  Mock tests cover the entry event while lockdown still returns false; actual
+  event/flag timing remains unverified. In-game, enter combat and move/use
+  status, then leave combat: no aura error should occur and reminders refresh.
 - The verified food allowlist is `consumables.food` in `Buffed.lua`; it is not
   exhaustive. Selection prefers Roasted Boar Meat, then lower-level foods,
   ignoring stat bonuses.
@@ -227,7 +240,7 @@ https://nether.wowhead.com/forever/tooltip/spell/12176
 | Scroll Intellect | 8096, 8097, 8098, 12176 |
 | Arcane Intellect | 1459, 1460, 1461, 10156, 10157 |
 | Arcane Brilliance | 23028 |
-| XP food | 1243969, 1248422 |
+| XP food | 1243969, 1248406, 1248420, 1248421, 1248422, 1248688, 1249519, 1249520, 1249521, 1249523 |
 
 The spell tooltips confirm English names, buff text, effects, durations, and
 required spell levels for the listed ranks. Fortitude/Prayer and mage Intellect
@@ -244,6 +257,52 @@ Forever ranks/variants exist, nor which IDs the actual client returns. Unknown
 IDs require an out-of-combat `/buffed status` report and verification before
 adding them. No stacking/replacement rules were changed. Casting and learned
 spell detection are deliberately unchanged pending separate API verification.
+
+## Supported XP food audit
+
+Rechecked all 49 entries in `consumables.food` using
+`https://nether.wowhead.com/forever/tooltip/item/{ID}`. Every English name and
+required character level matches the encoded entry (no listed requirement is
+represented as level 1). Every item explicitly grants +5% kill XP after at least
+10 seconds eating, with a 15-minute Well Fed bonus. No food priorities changed.
+Longjaw Mud Snapper (4592) requires level 5 and lists 10 Attack Power plus XP;
+its use spell is 1249506, not its resulting aura ID.
+
+Also checked every distinct linked Nutritious Food use spell at
+`https://nether.wowhead.com/forever/tooltip/spell/{ID}`:
+1248377, 1248378, 1248379, 1248380, 1248381, 1248382, 1248383, 1248384,
+1248386, 1248387, 1248388, 1248389, 1248390, 1248391, 1248392, 1248394,
+1248395, 1248687, 1249500, 1249501, 1249502, 1249504, 1249505, 1249506,
+1249512, 1249513, 1249514, 1249515, 1249516, 1249522.
+All 30 explicitly confirm +5% kill XP. Their tooltip endpoints have empty
+`buff`/`buffspells`; they do not expose a food-to-resulting-aura mapping.
+Human-readable Forever pages returned HTTP 403. No mappings were inferred from
+adjacent IDs, matching stats, or character level.
+
+Independently queried each aura below using
+`https://nether.wowhead.com/forever/tooltip/spell/{ID}`. Each is named Well Fed,
+lasts 15 minutes, and has `buffspells[1243969]` explicitly stating
+"Experience gained from kills increased by 5%." These qualify independently
+of which food applies them:
+
+| Aura ID | Listed additional effect |
+| --- | --- |
+| 1248406 | 1 Stamina |
+| 1248420 | 1 Agility |
+| 1248421 | 1 Intellect |
+| 1248422 | 1 Strength |
+| 1248688 | 15% movement speed while in Westfall |
+| 1249519 | 1 Attack Power |
+| 1249520 | 1 Spell Damage |
+| 1249521 | 1 Fishing Skill |
+| 1249523 | 1% Critical Strike chance |
+
+The aura stat amounts differ from many item tooltips. Scaling and exact
+food-to-aura mappings remain unverified; detection only relies on explicit XP
+text. This audit is not proof that no other XP-bearing aura IDs exist. Tests
+cover all nine qualifying IDs and rejection of an unknown Well Fed ID.
+In-game, try Longjaw Mud Snapper and other supported foods after 10 seconds
+of eating; if the icon remains, share an out-of-combat `/buffed status` report.
 
 ## In-game smoke test
 

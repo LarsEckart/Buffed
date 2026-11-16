@@ -21,7 +21,9 @@ Camp Benefits is an informational reminder only.
 - **XP food** — appears when you carry supported food and lack its XP buff.
   Click to eat and stay seated for at least 10 seconds for **+5% XP from kills**.
   Not all food or Well Fed buffs qualify. Supported foods include Roasted Boar
-  Meat, Crab Cake, Strider Stew, Smoked Sagefish, and Roast Raptor.
+  Meat, Brilliant Smallfish, Longjaw Mud Snapper, Crab Cake, Strider Stew,
+  Smoked Sagefish, and Roast Raptor.
+  Recognized XP-bearing Well Fed variants count even when they also grant stats.
 - **Scroll of Intellect** — uses your highest usable rank (I–IV); hidden when
   you already have Intellect or Arcane Brilliance.
 - **Cozy Sleeping Bag** — appears when you carry the bag and lack Well-Rested.
