@@ -450,7 +450,15 @@ assert(mutations == before)
 combat = false
 event("PLAYER_REGEN_ENABLED")
 assert(not food.shown and food.item == nil)
-for _, id in ipairs({ 2682, 5477, 2683, 21072, 12210, 3665 }) do
+bags[0] = { 250077 }
+level = 4
+event("BAG_UPDATE_DELAYED")
+assert(not food.shown, "Twice-Spiced Raptor Slice requires level 5")
+level = 5
+event("BAG_UPDATE_DELAYED")
+assert(food.shown and food.item == "item:250077", "select Twice-Spiced Raptor Slice at level 5")
+level = 22
+for _, id in ipairs({ 2682, 5477, 2683, 21072, 12210, 3665, 250077 }) do
     bags[0] = { id }
     event("BAG_UPDATE_DELAYED")
     assert(food.shown and food.item == "item:" .. id)
@@ -604,4 +612,93 @@ assert(emptySnapshotBox.SetTextArgs[1]:find("No out-of-combat aura snapshot avai
 assert(emptySnapshotBox.SetTextArgs[1]:find("aura unknown", 1, true))
 assert(emptySnapshotBox.SetTextArgs[1]:find("availability/learned state unknown", 1, true))
 combat = false
+-- Fresh druid session: reuse food but do not create unrelated reminders.
+frames, active, learned, bags = {}, {}, {}, {}
+BuffedDB = nil
+function UnitClass() return "Druid", "DRUID" end
+spellIDs["Mark of the Wild"] = 1126
+spellIDs.Thorns = 467
+assert(loadfile("Buffed.lua"))("Buffed")
+event("PLAYER_ENTERING_WORLD")
+local mark, thorns, druidFood
+local secureButtons = 0
+for _, frame in ipairs(frames) do
+    if frame.type == "spell" then
+        if frame.spell == "Mark of the Wild" then mark = frame
+        elseif frame.spell == "Thorns" then thorns = frame
+        else error("druids must not get priest spells") end
+    elseif frame.type == "item" then druidFood = frame end
+    if frame.type then secureButtons = secureButtons + 1 end
+end
+assert(secureButtons == 3 and mark and thorns and druidFood, "druid scope is Mark, Thorns and XP food")
+assert(not thorns.shown, "unlearned Thorns must hide")
+learned.Thorns = true
+event("SPELLS_CHANGED")
+assert(thorns.shown and thorns.unit == "player" and thorns.type == "spell" and BuffedDB.enabled.thorns)
+for _, id in ipairs({ 467, 782, 1075, 8914, 9756, 9910 }) do
+    active = { { name = "client aura", spellId = id } }
+    event("UNIT_AURA", "player")
+    assert(not thorns.shown, "verified Thorns ID must count: " .. id)
+end
+active = { "Thorns" }
+event("UNIT_AURA", "player")
+assert(not thorns.shown, "Thorns name fallback must count")
+active = { { name = "Thorns", spellId = 999999 } }
+event("UNIT_AURA", "player")
+assert(thorns.shown, "unknown Thorns IDs must not match by name")
+SlashCmdList.BUFFED("thorns")
+assert(not thorns.shown and not BuffedDB.enabled.thorns)
+SlashCmdList.BUFFED("thorns")
+assert(thorns.shown and BuffedDB.enabled.thorns)
+active = {}
+assert(not mark.shown and not druidFood.shown, "unlearned Mark and absent food should hide")
+learned["Mark of the Wild"] = true
+event("SPELLS_CHANGED")
+assert(mark.shown and mark.unit == "player" and BuffedDB.enabled.mark)
+for _, id in ipairs({ 1126, 5232, 6756, 5234, 8907, 9884, 9885, 21849, 21850 }) do
+    active = { { name = "client aura", spellId = id } }
+    event("UNIT_AURA", "player")
+    assert(not mark.shown, "verified Mark/Gift ID must count: " .. id)
+end
+for _, name in ipairs({ "Mark of the Wild", "Gift of the Wild" }) do
+    active = { name }
+    event("UNIT_AURA", "player")
+    assert(not mark.shown, "Mark/Gift name fallback should count")
+end
+active = { { name = "Mark of the Wild", spellId = 999999 } }
+event("UNIT_AURA", "player")
+assert(mark.shown, "unknown Mark IDs must not match by name")
+SlashCmdList.BUFFED("mark")
+assert(not mark.shown and not BuffedDB.enabled.mark)
+SlashCmdList.BUFFED("mark")
+assert(mark.shown)
+bags[0] = { 2681 }
+event("BAG_UPDATE_DELAYED")
+assert(druidFood.shown and druidFood.item == "item:2681" and druidFood.unit == "player")
+active = { { name = "Well Fed", spellId = 1249519 } }
+event("UNIT_AURA", "player")
+assert(not druidFood.shown and mark.shown)
+active, bags = {}, {}
+event("BAG_UPDATE_DELAYED")
+assert(not druidFood.shown, "removing food must hide the druid reminder")
+local beforeCombat = scans
+combat = true
+event("PLAYER_REGEN_DISABLED")
+event("UNIT_AURA", "player")
+SlashCmdList.BUFFED("status")
+assert(scans == beforeCombat, "druid combat diagnostics must use cached data")
+combat = false
+event("PLAYER_REGEN_ENABLED")
+mounted = true
+event("PLAYER_MOUNT_DISPLAY_CHANGED", "player")
+assert(not mark.shown and not thorns.shown)
+mounted = false
+event("PLAYER_MOUNT_DISPLAY_CHANGED", "player")
+assert(mark.shown and thorns.shown)
+dead = true
+event("PLAYER_DEAD")
+assert(not mark.shown and not thorns.shown)
+dead = false
+event("PLAYER_ALIVE")
+assert(mark.shown and thorns.shown)
 print("Buffed mock smoke tests passed")

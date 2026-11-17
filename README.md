@@ -1,6 +1,6 @@
 # Buffed
 
-Clickable self-buff reminders for priests in **WoW Forever** (English client).
+Clickable self-buff reminders for priests and druids in **WoW Forever** (English client).
 
 ## Setup
 
@@ -12,6 +12,12 @@ Camp Benefits is an informational reminder only.
 
 ## Reminders
 
+Druids currently get **Mark of the Wild** (Gift of the Wild also counts),
+**Thorns**, and the shared **XP food** reminder below. Spell reminders appear
+only when learned and missing; click to cast on yourself. Toggle them with
+`/buffed mark`, `/buffed thorns`, or `/buffed food`.
+The remaining reminders are priest-only.
+
 - **Camp Benefits** — appears when the umbrella buff is missing, regardless of
   carried items. This icon cannot refresh the buff; visit a camp. Individual
   camp benefits are not checked.
@@ -22,7 +28,7 @@ Camp Benefits is an informational reminder only.
   Click to eat and stay seated for at least 10 seconds for **+5% XP from kills**.
   Not all food or Well Fed buffs qualify. Supported foods include Roasted Boar
   Meat, Brilliant Smallfish, Longjaw Mud Snapper, Crab Cake, Strider Stew,
-  Smoked Sagefish, and Roast Raptor.
+  Smoked Sagefish, Roast Raptor, and Twice-Spiced Raptor Slice.
   Recognized XP-bearing Well Fed variants count even when they also grant stats.
 - **Scroll of Intellect** — uses your highest usable rank (I–IV); hidden when
   you already have Intellect or Arcane Brilliance.
@@ -43,7 +49,7 @@ saved per character. Other classes are not supported.
 | `/buffed unlock` | Drag the **Buffed** label to move the bar |
 | `/buffed lock` | Lock the bar |
 | `/buffed reset` | Reset its position |
-| `/buffed fortitude`, `spirit`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, or `camp` | Toggle that reminder |
+| `/buffed mark`, `thorns`, `fortitude`, `spirit`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, or `camp` | Toggle a reminder supported by your class |
 | `/buffed status` | Show diagnostics in chat and a copy window |
 
 If a reminder stays visible after buffing, run `/buffed status`, press **Ctrl+C**

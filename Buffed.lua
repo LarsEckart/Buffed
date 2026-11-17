@@ -1,5 +1,5 @@
 local _, class = UnitClass("player")
-if class ~= "PRIEST" then return end
+if class ~= "PRIEST" and class ~= "DRUID" then return end
 
 -- Aura IDs verified at https://nether.wowhead.com/forever/tooltip/spell/{ID}
 -- (each listed rank checked; verification details in AGENTS.md).
@@ -10,6 +10,9 @@ local buffs = {
     -- https://nether.wowhead.com/forever/tooltip/spell/1229741
     { key = "camp", name = "Camp Benefits", auraIDs = { 1229741 }, reminderOnly = true,
         icon = "Interface\\Icons\\inv_camelot_camping_campbenefits" },
+    { key = "mark", name = "Mark of the Wild", alternate = "Gift of the Wild",
+        auraIDs = { 1126, 5232, 6756, 5234, 8907, 9884, 9885, 21849, 21850 } },
+    { key = "thorns", name = "Thorns", auraIDs = { 467, 782, 1075, 8914, 9756, 9910 } },
     { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude",
         auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
     { key = "spirit", name = "Divine Spirit", alternate = "Prayer of Spirit",
@@ -29,6 +32,16 @@ local buffs = {
     { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance",
         auraIDs = { 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 } },
 }
+
+-- Druids currently get Mark, Thorns and the shared XP-food reminder.
+local classBuffs = {}
+for _, buff in ipairs(buffs) do
+    if (class == "DRUID" and (buff.key == "mark" or buff.key == "thorns" or buff.key == "food"))
+        or (class == "PRIEST" and buff.key ~= "mark" and buff.key ~= "thorns") then
+        classBuffs[#classBuffs + 1] = buff
+    end
+end
+buffs = classBuffs
 
 local events = CreateFrame("Frame")
 local anchor, initialized
@@ -177,6 +190,8 @@ local consumables = {
         { id = 5476, level = 5, name = "Fillet of Frenzy" },
         { id = 6316, level = 5, name = "Loch Frenzy Delight" },
         { id = 12213, level = 5, name = "Carrion Surprise" },
+        -- https://nether.wowhead.com/forever/tooltip/item/250077
+        { id = 250077, level = 5, name = "Twice-Spiced Raptor Slice" },
         { id = 21072, level = 10, name = "Smoked Sagefish" },
         { id = 1017, level = 15, name = "Seasoned Wolf Kabob" },
         { id = 2685, level = 15, name = "Succulent Pork Ribs" },
@@ -419,7 +434,9 @@ local function HandleCommand(message)
     local command = message:lower():match("^%s*(.-)%s*$")
     if command == "" or command == "help" then
         Print("/buffed unlock | lock | reset | status")
-        Print("Toggle a reminder: /buffed fortitude | spirit | fire | shadowguard | food | intellect | sleepingbag | camp")
+        local keys = {}
+        for _, buff in ipairs(buffs) do keys[#keys + 1] = buff.key end
+        Print("Toggle a reminder: /buffed " .. table.concat(keys, " | "))
         return
     end
     if command == "status" then

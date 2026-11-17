@@ -1,5 +1,71 @@
 # Developer instructions
 
+## Local patches to neighboring addons
+
+These are user-requested local fixes outside Buffed. Addon updates can overwrite
+them; inspect the updated code before reapplying. Do not automatically modify
+neighboring addons as part of ordinary Buffed work.
+
+### ForeverRecipes: protected tooltip text
+
+- File: `../ForeverRecipes/ItemTooltip.lua`, function `HasEstimateLines`.
+- Error: comparing local `text` (a secret string) at the original line 107 when
+  hovering bag items or loot-roll items.
+- Fix: replace the entire tooltip-text scan with the existing addon-owned marker:
+
+  ```lua
+  local function HasEstimateLines(tooltip)
+      -- Do not read/compare Blizzard tooltip text: it may contain secret values.
+      return appendedItems[tooltip] ~= nil
+  end
+  ```
+
+- Retain `WatchTooltip`'s `OnTooltipCleared` reset and `AppendValues`'s assignment
+  of `appendedItems[tooltip]` when rows are added. These prevent duplicate rows
+  without inspecting protected text.
+- Installed version 1.15.1 had the same affected file as the pre-patch backup;
+  installing it overwrote the first fix. The error recurred and the fix was
+  reapplied. CurseForge comments could not be checked due to a browser challenge.
+- Mock tests passed for no tooltip-text scanning, duplicate suppression,
+  clear/reset, and unavailable-then-available prices. Actual client behavior
+  after reapplying still needs confirmation: `/reload`, hover bag and loot-roll
+  items, and check for errors and duplicate estimate rows.
+
+### WhereYouAt: protected group-leader location
+
+- File: `../WhereYouAt/WhereYouAt.lua`, function `UpdateAreaName`.
+- Error: comparing local `areaName` (a secret string) at the original line 22
+  during `LFGBrowseSearchEntry_Update`.
+- Fix: remove this entire conditional, including its `return`:
+
+  ```lua
+  if not areaName or areaName == "" then
+      return
+  end
+  ```
+
+  Keep the existing direct display calls:
+
+  ```lua
+  areaLabel:SetText(areaName)
+  areaLabel:Show()
+  ```
+
+- Do not test, compare, concatenate, or format the location value. This patch
+  passes it directly to the label rather than attempting to access its contents.
+  Missing/empty text leaves a blank label.
+- Mock tests passed for ordinary, empty, and missing locations. They cannot
+  simulate client secret-value restrictions. Direct display of a protected
+  location in Forever remains unverified: `/reload`, reopen the group finder,
+  and request any new error before attempting further changes.
+
+Pre-patch backups and temporary mock tests were saved under
+`C:/Users/katri/AppData/Local/Temp/` (not durable repository fixtures):
+`ForeverRecipes-ItemTooltip.before-secret-fix.lua`,
+`forever-recipes-tooltip-test.lua`, `WhereYouAt.before-secret-fix.lua`, and
+`whereyouat-secret-test.lua`. No neighboring-addon changes were committed or
+pushed.
+
 ## Target WoW Forever, not Classic
 
 This addon targets **World of Warcraft Forever**, English locale, interface
@@ -224,6 +290,45 @@ data sources, and test procedures belong here or beside the relevant code.
   Remove Well-Rested to restore it; remove the bag to hide it. Check the
   `/buffed sleepingbag` toggle and confirm normal combat suppression.
 
+### Druid Mark of the Wild reminder
+
+- Druids currently get `mark`, `thorns` and the existing shared `food` reminder.
+  Priest reminders are unchanged; other classes still do nothing. This supersedes
+  earlier priest-only scope statements. No other druid features added.
+- Individually verified every ID at
+  `https://nether.wowhead.com/forever/tooltip/spell/{ID}`:
+  Mark of the Wild 1126/5232/6756/5234/8907/9884/9885 (levels
+  1/10/20/30/40/50/60), Gift of the Wild 21849/21850 (levels 50/60).
+  All list one-hour buffs. Mark grants armor, with attributes from level 10
+  and resistances from level 30; Gift lists equivalent level-50/60 bonuses.
+  No additional ranks or stacking behavior inferred.
+- Uses existing learned-spell, self-cast, out-of-combat paths; Gift also satisfies
+  the reminder. The button always casts Mark. XP food selection is unchanged.
+- Mock coverage: learned/unlearned Mark, self-target attributes, all nine IDs,
+  name fallback, unknown-ID rejection, toggle, food availability/XP detection,
+  class isolation, cached combat diagnostics, mount/death suppression.
+- Actual Forever druid casting/API behavior remains unverified. In-game:
+  `/reload`, remove Mark, click with another unit targeted, confirm self-cast
+  and icon disappearance. Check Gift, food from bags, toggles, combat/mount/death
+  suppression. Share out-of-combat `/buffed status` if detection fails.
+
+### Druid Thorns reminder
+
+- `thorns` uses the existing learned-spell, self-targeted secure cast and
+  out-of-combat aura paths. No live combat aura checks or automatic casting.
+- Individually verified Forever endpoints
+  `https://nether.wowhead.com/forever/tooltip/spell/{ID}` for
+  467/782/1075/8914/9756/9910: English name Thorns, required character levels
+  6/14/24/34/44/54, ten-minute buff, and 3/6/9/12/15/18 Nature damage to
+  attackers when hit. No other ranks or interactions inferred.
+- Mock tests cover learned/unlearned availability, self-target attributes,
+  all six aura IDs, name fallback, unknown-ID rejection, toggle, druid scope,
+  combat scan suppression and mount/death hiding.
+- In-game validation pending: `/reload`, remove Thorns, click its reminder
+  with another unit targeted; confirm self-cast and disappearance. Check
+  `/buffed thorns` and combat/mount/death suppression. If detection fails,
+  share out-of-combat `/buffed status`.
+
 ### Divine Spirit reminder
 
 - `spirit` uses the existing learned-spell, self-cast, out-of-combat reminder path.
@@ -280,6 +385,15 @@ adding them. No stacking/replacement rules were changed. Casting and learned
 spell detection are deliberately unchanged pending separate API verification.
 
 ## Supported XP food audit
+
+Added Twice-Spiced Raptor Slice (250077) after verifying:
+https://nether.wowhead.com/forever/tooltip/item/250077
+https://nether.wowhead.com/forever/tooltip/spell/1248383
+Requires character level 5; at least 10 seconds eating grants 3 Intellect and
++5% kill XP for 15 minutes. The use spell does not expose a resulting aura ID;
+no additional aura mapping was inferred. Tests cover selection at level 5 and
+rejection at level 4. This brings the allowlist to 50 entries, not an exhaustive
+Forever food list. In-game selection/click behavior still needs confirmation.
 
 Rechecked all 49 entries in `consumables.food` using
 `https://nether.wowhead.com/forever/tooltip/item/{ID}`. Every English name and
