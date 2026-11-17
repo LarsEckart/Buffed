@@ -226,8 +226,8 @@ data sources, and test procedures belong here or beside the relevant code.
   event/flag timing remains unverified. In-game, enter combat and move/use
   status, then leave combat: no aura error should occur and reminders refresh.
 - The verified food allowlist is `consumables.food` in `Buffed.lua`; it is not
-  exhaustive. Selection prefers Roasted Boar Meat, then lower-level foods,
-  ignoring stat bonuses.
+  exhaustive. Selection prefers the highest usable required character level,
+  breaking equal-level ties by allowlist order, without ranking stat bonuses.
 - Scroll of Intellect supports ranks I–IV (required levels 5/20/35/50), selecting
   the highest usable rank. Arcane Intellect/Brilliance also satisfy the reminder.
 - Initialization occurs on world entry, not login or earlier bag/spell events;
@@ -247,7 +247,26 @@ data sources, and test procedures belong here or beside the relevant code.
   detection, items beyond XP food, Intellect scrolls, and Cozy Sleeping Bag, a minimap button,
   and an options panel. Other classes do nothing.
 
+### Shared reminders and class scope
+
+- Item-based reminders (`food`, `intellect`, `sleepingbag`) and informational
+  `camp` are available to every class. Item reminders still require a carried,
+  usable allowlisted item; Camp Benefits has no item prerequisite.
+- Only spell reminders are class-filtered: priests get `fortitude`, `spirit`,
+  `fire`, `shadowguard`; druids get `mark`, `thorns`. This supersedes older
+  priest/druid-only scope notes below. No new gameplay data or spell support added.
+- Mock coverage checks all shared reminders with and without carried items and
+  qualifying auras across nine class tokens, spell isolation, and shared toggles.
+  Actual Forever validation pending: on a druid and another class, `/reload`,
+  carry usable food/Intellect scroll/bag, check missing/present buffs and toggles,
+  and confirm normal combat/mount/death and dungeon suppression.
+
 ### Camp Benefits reminder
+
+- Available to priests and druids. Druid mock coverage includes default enablement,
+  informational-only attributes, aura detection, toggle, and dungeon suppression.
+  In-game druid validation pending: `/reload`, check missing/present Camp Benefits,
+  `/buffed camp`, and dungeon entry/exit.
 
 - `/buffed camp` toggles an informational-only reminder for the umbrella aura
   Camp Benefits (1229741), observed in the user's out-of-combat status report.
@@ -292,7 +311,7 @@ data sources, and test procedures belong here or beside the relevant code.
 
 ### Druid Mark of the Wild reminder
 
-- Druids currently get `mark`, `thorns` and the existing shared `food` reminder.
+- Druids currently get `mark`, `thorns` and the shared `food` and `camp` reminders.
   Priest reminders are unchanged; other classes still do nothing. This supersedes
   earlier priest-only scope statements. No other druid features added.
 - Individually verified every ID at
@@ -385,6 +404,56 @@ adding them. No stacking/replacement rules were changed. Casting and learned
 spell detection are deliberately unchanged pending separate API verification.
 
 ## Supported XP food audit
+
+Verified 249865/249866/249867/249868/13933/249870 at
+`https://nether.wowhead.com/forever/tooltip/item/{ID}`. All explicitly grant
++5% kill XP after at least 10 seconds consuming, with a 15-minute Well Fed bonus.
+Lobster Stew (13933, level 45) was already supported. Added Peace Tea (249865,
+no listed character-level requirement), Royal Tea (249866, level 5), Root Tea
+(249867, level 15), Triage Tea (249868, level 25), and Sage's Tea (249870,
+level 45). The allowlist now contains 61 entries. These drinks use the same
+item-use path; no general drink detection or aura mappings were added.
+Individually verified linked use spells at
+`https://nether.wowhead.com/forever/tooltip/spell/{ID}`:
+1249920/1249921/1249922/1249923/1249925. They confirm the XP effect and
+2/7/11/22/44 Healing Power respectively; tooltip wording says eating despite
+restoring mana while drinking. Resulting aura IDs are not exposed.
+Mock tests cover selection and required-level boundaries for all six items.
+Actual drinking and resulting XP aura detection still need in-game validation.
+
+Reverified 5095/21072/21217/274971/13931/13935/249869 at
+`https://nether.wowhead.com/forever/tooltip/item/{ID}`. All explicitly grant
++5% kill XP after at least 10 seconds eating, with a 15-minute Well Fed bonus.
+5095/21072/13931 were already supported at levels 5/10/35. Added Sagefish
+Delight (21217, level 30), Briny Seafood Stew (274971, level 25), Baked Salmon
+(13935, level 45), and Sunny Tea (249869, level 35); allowlist now has 56 entries.
+Sunny Tea restores mana while drinking, although its bonus text says eating;
+its explicit XP effect qualifies it for the same reminder. No general drinks
+support or new aura mapping was inferred. New distinct use spells verified:
+https://nether.wowhead.com/forever/tooltip/spell/1249507
+https://nether.wowhead.com/forever/tooltip/spell/1249510
+https://nether.wowhead.com/forever/tooltip/spell/1249924
+These list 7 Spell Damage, 14 Spell Damage, and 33 Healing Power respectively,
+plus the XP effect, with no resulting aura mapping exposed. Baked Salmon uses
+previously verified 1249516 (28 Spell Damage). Tests cover selection at each
+item's required level and rejection below it. In-game selection, secure item use
+and resulting XP aura detection for these additions remain to be confirmed.
+
+Reverified user-provided IDs 6290/787/4592/8364/13927/13932/13934 at
+`https://nether.wowhead.com/forever/tooltip/item/{ID}`. All explicitly grant
++5% kill XP after 10 seconds eating, with a 15-minute Well Fed bonus.
+Added Slitherskin Mackerel (787, no listed character-level requirement) and
+Mithril Head Trout (8364, required level 25), bringing the allowlist to 52.
+The other five were already supported, with requirements 1/5/35/35/45.
+Also verified their new linked use spells:
+https://nether.wowhead.com/forever/tooltip/spell/1249503
+https://nether.wowhead.com/forever/tooltip/spell/1249509
+These confirm 6/20 Attack Power respectively and the XP effect; neither exposes
+a resulting aura mapping. Tests cover all seven items' availability and level
+boundaries, plus highest-usable-level selection, fallback and stable ties.
+In-game: carry multiple levels of supported food without its XP buff, `/reload`,
+and confirm the highest usable level is selected and clicking eats that item.
+No class-specific stat optimization or increased-healing tie-breaker is claimed.
 
 Added Twice-Spiced Raptor Slice (250077) after verifying:
 https://nether.wowhead.com/forever/tooltip/item/250077

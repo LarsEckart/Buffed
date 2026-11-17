@@ -457,6 +457,23 @@ assert(not food.shown, "Twice-Spiced Raptor Slice requires level 5")
 level = 5
 event("BAG_UPDATE_DELAYED")
 assert(food.shown and food.item == "item:250077", "select Twice-Spiced Raptor Slice at level 5")
+for _, entry in ipairs({ { 6290, 1 }, { 787, 1 }, { 4592, 5 },
+    { 8364, 25 }, { 13927, 35 }, { 13932, 35 }, { 13934, 45 },
+    { 5095, 5 }, { 21072, 10 }, { 21217, 30 }, { 274971, 25 },
+    { 13931, 35 }, { 13935, 45 }, { 249869, 35 }, { 249865, 1 },
+    { 249866, 5 }, { 249867, 15 }, { 249868, 25 }, { 13933, 45 },
+    { 249870, 45 } }) do
+    local id, requiredLevel = entry[1], entry[2]
+    bags[0] = { id }
+    if requiredLevel > 1 then
+        level = requiredLevel - 1
+        event("BAG_UPDATE_DELAYED")
+        assert(not food.shown, "food must hide below required level: " .. id)
+    end
+    level = requiredLevel
+    event("BAG_UPDATE_DELAYED")
+    assert(food.shown and food.item == "item:" .. id, "food must be selectable: " .. id)
+end
 level = 22
 for _, id in ipairs({ 2682, 5477, 2683, 21072, 12210, 3665, 250077 }) do
     bags[0] = { id }
@@ -468,9 +485,19 @@ for _, id in ipairs({ 2679, 5525, 5527, 17197, 17198, 6657, 12217, 13933 }) do
     event("BAG_UPDATE_DELAYED")
     assert(not food.shown, "non-XP or unusable food must not be selected")
 end
-bags[0] = { 12210, 2681, 2683 }
+bags[0] = { 12210, 2681, 2683, 8364 }
 event("BAG_UPDATE_DELAYED")
-assert(food.item == "item:2681", "prefer boar meat over stat bonuses")
+assert(food.item == "item:12210", "prefer highest usable level, excluding level-25 food at level 22")
+level = 25
+event("BAG_UPDATE_DELAYED")
+assert(food.item == "item:8364", "prefer newly usable higher-level food")
+bags[0] = { 2683, 2681 }
+event("BAG_UPDATE_DELAYED")
+assert(food.item == "item:2683", "fall back to the highest remaining usable food")
+bags[0] = { 787, 6290 }
+event("BAG_UPDATE_DELAYED")
+assert(food.item == "item:6290", "equal-level ties use list order, not bag order")
+level = 22
 bags[0] = {}
 event("BAG_UPDATE_DELAYED")
 
@@ -612,7 +639,7 @@ assert(emptySnapshotBox.SetTextArgs[1]:find("No out-of-combat aura snapshot avai
 assert(emptySnapshotBox.SetTextArgs[1]:find("aura unknown", 1, true))
 assert(emptySnapshotBox.SetTextArgs[1]:find("availability/learned state unknown", 1, true))
 combat = false
--- Fresh druid session: reuse food but do not create unrelated reminders.
+-- Fresh druid session: shared reminders plus druid spells, never priest spells.
 frames, active, learned, bags = {}, {}, {}, {}
 BuffedDB = nil
 function UnitClass() return "Druid", "DRUID" end
@@ -620,17 +647,40 @@ spellIDs["Mark of the Wild"] = 1126
 spellIDs.Thorns = 467
 assert(loadfile("Buffed.lua"))("Buffed")
 event("PLAYER_ENTERING_WORLD")
-local mark, thorns, druidFood
+local mark, thorns, druidFood, druidCamp
 local secureButtons = 0
 for _, frame in ipairs(frames) do
     if frame.type == "spell" then
         if frame.spell == "Mark of the Wild" then mark = frame
         elseif frame.spell == "Thorns" then thorns = frame
         else error("druids must not get priest spells") end
-    elseif frame.type == "item" then druidFood = frame end
+    elseif frame.type == "item" then druidFood = druidFood or frame
+    elseif frame.icon and frame.icon.SetTextureArgs
+        and frame.icon.SetTextureArgs[1] == "Interface\\Icons\\inv_camelot_camping_campbenefits" then
+        druidCamp = frame
+    end
     if frame.type then secureButtons = secureButtons + 1 end
 end
-assert(secureButtons == 3 and mark and thorns and druidFood, "druid scope is Mark, Thorns and XP food")
+assert(secureButtons == 5 and mark and thorns and druidFood and druidCamp,
+    "druid scope is Mark, Thorns and all shared reminders")
+assert(druidCamp.shown and BuffedDB.enabled.camp)
+assert(druidCamp.type == nil and druidCamp.spell == nil and druidCamp.item == nil)
+active = { { name = "Camp Benefits", spellId = 1229741 } }
+event("UNIT_AURA", "player")
+assert(not druidCamp.shown)
+active = {}
+event("UNIT_AURA", "player")
+assert(druidCamp.shown)
+SlashCmdList.BUFFED("camp")
+assert(not druidCamp.shown and not BuffedDB.enabled.camp)
+SlashCmdList.BUFFED("camp")
+assert(druidCamp.shown and BuffedDB.enabled.camp)
+inInstance, instanceType = true, "party"
+event("PLAYER_ENTERING_WORLD")
+assert(not druidCamp.shown, "druid camp reminder must hide in dungeons")
+inInstance, instanceType = false, "none"
+event("PLAYER_ENTERING_WORLD")
+assert(druidCamp.shown)
 assert(not thorns.shown, "unlearned Thorns must hide")
 learned.Thorns = true
 event("SPELLS_CHANGED")
@@ -701,4 +751,54 @@ assert(not mark.shown and not thorns.shown)
 dead = false
 event("PLAYER_ALIVE")
 assert(mark.shown and thorns.shown)
+-- Shared reminders work for every class, independent of learned class spells.
+for _, classToken in ipairs({ "PRIEST", "DRUID", "WARRIOR", "MAGE", "ROGUE",
+    "HUNTER", "WARLOCK", "PALADIN", "SHAMAN" }) do
+    frames, active, learned, bags = {}, {}, {}, {}
+    BuffedDB = nil
+    level = 60
+    function UnitClass() return classToken, classToken end
+    assert(loadfile("Buffed.lua"))("Buffed")
+    event("PLAYER_ENTERING_WORLD")
+    local itemButtons, spellButtons, sharedCamp = {}, {}, nil
+    for _, frame in ipairs(frames) do
+        if frame.type == "item" then
+            itemButtons[#itemButtons + 1] = frame
+            assert(not frame.shown, "absent items must hide: " .. classToken)
+        elseif frame.type == "spell" then
+            spellButtons[#spellButtons + 1] = frame
+            local druidSpell = frame.spell == "Mark of the Wild" or frame.spell == "Thorns"
+            assert((classToken == "DRUID" and druidSpell)
+                or (classToken == "PRIEST" and not druidSpell), "class spell leaked")
+        elseif frame.icon and frame.icon.SetTextureArgs
+            and frame.icon.SetTextureArgs[1] == "Interface\\Icons\\inv_camelot_camping_campbenefits" then
+            sharedCamp = frame
+        end
+    end
+    assert(#itemButtons == 3 and sharedCamp and sharedCamp.shown)
+    assert(#spellButtons == (classToken == "PRIEST" and 4 or classToken == "DRUID" and 2 or 0))
+    bags[0] = { 2681, 955, 211527 }
+    event("BAG_UPDATE_DELAYED")
+    local selected = {}
+    for _, button in ipairs(itemButtons) do
+        assert(button.shown and button.unit == "player")
+        selected[button.item] = true
+    end
+    assert(selected["item:2681"] and selected["item:955"] and selected["item:211527"])
+    active = { { name = "Well Fed XP Boost", spellId = 1243969 },
+        { name = "Intellect", spellId = 8096 },
+        { name = "Well-Rested", spellId = 429959 },
+        { name = "Camp Benefits", spellId = 1229741 } }
+    event("UNIT_AURA", "player")
+    for _, button in ipairs(itemButtons) do assert(not button.shown) end
+    assert(not sharedCamp.shown)
+    active, bags = {}, {}
+    event("BAG_UPDATE_DELAYED")
+    for _, button in ipairs(itemButtons) do assert(not button.shown) end
+    assert(sharedCamp.shown)
+    SlashCmdList.BUFFED("sleepingbag")
+    assert(not BuffedDB.enabled.sleepingbag)
+    SlashCmdList.BUFFED("intellect")
+    assert(not BuffedDB.enabled.intellect)
+end
 print("Buffed mock smoke tests passed")

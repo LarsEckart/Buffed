@@ -1,5 +1,4 @@
 local _, class = UnitClass("player")
-if class ~= "PRIEST" and class ~= "DRUID" then return end
 
 -- Aura IDs verified at https://nether.wowhead.com/forever/tooltip/spell/{ID}
 -- (each listed rank checked; verification details in AGENTS.md).
@@ -33,11 +32,14 @@ local buffs = {
         auraIDs = { 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 } },
 }
 
--- Druids currently get Mark, Thorns and the shared XP-food reminder.
+-- Items and informational reminders are shared; spell reminders are class-specific.
+local spellClasses = {
+    mark = "DRUID", thorns = "DRUID",
+    fortitude = "PRIEST", spirit = "PRIEST", fire = "PRIEST", shadowguard = "PRIEST",
+}
 local classBuffs = {}
 for _, buff in ipairs(buffs) do
-    if (class == "DRUID" and (buff.key == "mark" or buff.key == "thorns" or buff.key == "food"))
-        or (class == "PRIEST" and buff.key ~= "mark" and buff.key ~= "thorns") then
+    if buff.item or buff.reminderOnly or spellClasses[buff.key] == class then
         classBuffs[#classBuffs + 1] = buff
     end
 end
@@ -155,10 +157,10 @@ local function ActiveBuffs()
     return active, details
 end
 
--- Highest priority first. IDs avoid depending on cached item-name data.
+-- IDs avoid depending on cached item-name data. List order breaks equal-level ties.
 -- Food entries explicitly list +5% kill XP in Wowhead Forever's tooltip:
 -- https://nether.wowhead.com/forever/tooltip/item/<id>
--- Prefer Roasted Boar Meat, then low-level foods; stat bonuses are irrelevant.
+-- Prefer the highest usable required character level; stat bonuses are not ranked.
 -- This is a verified allowlist, not an exhaustive list of Forever foods.
 local consumables = {
     -- No character-level requirement listed (item level 40 is not a use level).
@@ -176,8 +178,12 @@ local consumables = {
         { id = 5477, level = 1, name = "Strider Stew" },
         { id = 3663, level = 1, name = "Murloc Fin Soup" },
         { id = 6290, level = 1, name = "Brilliant Smallfish" },
+        -- https://nether.wowhead.com/forever/tooltip/item/787
+        { id = 787, level = 1, name = "Slitherskin Mackerel" },
         { id = 6888, level = 1, name = "Herb Baked Egg" },
         { id = 6890, level = 1, name = "Smoked Bear Meat" },
+        -- https://nether.wowhead.com/forever/tooltip/item/249865
+        { id = 249865, level = 1, name = "Peace Tea" },
         { id = 733, level = 5, name = "Westfall Stew" },
         { id = 2683, level = 5, name = "Crab Cake" },
         { id = 2684, level = 5, name = "Coyote Steak" },
@@ -192,6 +198,8 @@ local consumables = {
         { id = 12213, level = 5, name = "Carrion Surprise" },
         -- https://nether.wowhead.com/forever/tooltip/item/250077
         { id = 250077, level = 5, name = "Twice-Spiced Raptor Slice" },
+        -- https://nether.wowhead.com/forever/tooltip/item/249866
+        { id = 249866, level = 5, name = "Royal Tea" },
         { id = 21072, level = 10, name = "Smoked Sagefish" },
         { id = 1017, level = 15, name = "Seasoned Wolf Kabob" },
         { id = 2685, level = 15, name = "Succulent Pork Ribs" },
@@ -203,10 +211,20 @@ local consumables = {
         { id = 12209, level = 15, name = "Lean Wolf Steak" },
         { id = 12210, level = 15, name = "Roast Raptor" },
         { id = 12214, level = 15, name = "Mystery Stew" },
+        -- https://nether.wowhead.com/forever/tooltip/item/249867
+        { id = 249867, level = 15, name = "Root Tea" },
         { id = 3728, level = 25, name = "Tasty Lion Steak" },
         { id = 4457, level = 25, name = "Barbecued Buzzard Wing" },
         { id = 12215, level = 25, name = "Heavy Kodo Stew" },
         { id = 12216, level = 25, name = "Spiced Chili Crab" },
+        -- https://nether.wowhead.com/forever/tooltip/item/8364
+        { id = 8364, level = 25, name = "Mithril Head Trout" },
+        -- https://nether.wowhead.com/forever/tooltip/item/274971
+        { id = 274971, level = 25, name = "Briny Seafood Stew" },
+        -- https://nether.wowhead.com/forever/tooltip/item/249868
+        { id = 249868, level = 25, name = "Triage Tea" },
+        -- https://nether.wowhead.com/forever/tooltip/item/21217
+        { id = 21217, level = 30, name = "Sagefish Delight" },
         { id = 6887, level = 35, name = "Spotted Yellowtail" },
         { id = 12212, level = 35, name = "Jungle Stew" },
         { id = 12218, level = 35, name = "Monster Omelet" },
@@ -217,8 +235,15 @@ local consumables = {
         { id = 13931, level = 35, name = "Nightfin Soup" },
         { id = 13932, level = 35, name = "Poached Sunscale Salmon" },
         { id = 18045, level = 35, name = "Tender Wolf Steak" },
+        -- XP-bearing drink; same XP reminder and secure item-use path.
+        -- https://nether.wowhead.com/forever/tooltip/item/249869
+        { id = 249869, level = 35, name = "Sunny Tea" },
         { id = 13933, level = 45, name = "Lobster Stew" },
         { id = 13934, level = 45, name = "Mightfish Steak" },
+        -- https://nether.wowhead.com/forever/tooltip/item/13935
+        { id = 13935, level = 45, name = "Baked Salmon" },
+        -- https://nether.wowhead.com/forever/tooltip/item/249870
+        { id = 249870, level = 45, name = "Sage's Tea" },
     },
     -- Required character levels (not item levels), verified on Wowhead Forever:
     -- https://www.wowhead.com/forever/item=955
@@ -244,9 +269,15 @@ local function FindConsumable(buff)
             if id then carried[id] = true end
         end
     end
+    local selected
+    local level = UnitLevel("player")
     for _, item in ipairs(consumables[buff.key]) do
-        if carried[item.id] and UnitLevel("player") >= item.level then return item end
+        if carried[item.id] and level >= item.level
+            and (not selected or item.level > selected.level) then
+            selected = item
+        end
     end
+    return selected
 end
 
 local function ItemTexture(id, fallback)

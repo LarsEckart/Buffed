@@ -1,6 +1,6 @@
 # Buffed
 
-Clickable self-buff reminders for priests and druids in **WoW Forever** (English client).
+Buff reminders for all classes in **WoW Forever** (English client).
 
 ## Setup
 
@@ -12,23 +12,28 @@ Camp Benefits is an informational reminder only.
 
 ## Reminders
 
-Druids currently get **Mark of the Wild** (Gift of the Wild also counts),
-**Thorns**, and the shared **XP food** reminder below. Spell reminders appear
-only when learned and missing; click to cast on yourself. Toggle them with
-`/buffed mark`, `/buffed thorns`, or `/buffed food`.
-The remaining reminders are priest-only.
+**All classes** get XP food, Intellect scroll, Cozy Sleeping Bag, and Camp Benefits
+reminders when their prerequisites are met. Item reminders require a supported,
+usable item in your bags; Camp Benefits needs no item.
+
+**Druids** also get **Mark of the Wild** (Gift of the Wild counts) and **Thorns**.
+**Priests** also get the spell reminders listed below. Spell reminders appear
+only when learned and missing; click to cast on yourself.
 
 - **Camp Benefits** — appears when the umbrella buff is missing, regardless of
   carried items. This icon cannot refresh the buff; visit a camp. Individual
   camp benefits are not checked.
 
-- **Power Word: Fortitude, Divine Spirit, Inner Fire, and Shadowguard** — only learned spells
+- **Power Word: Fortitude, Divine Spirit, Inner Fire, and Shadowguard** (priests) — only learned spells
   appear; equivalent prayer buffs also count.
-- **XP food** — appears when you carry supported food and lack its XP buff.
-  Click to eat and stay seated for at least 10 seconds for **+5% XP from kills**.
+- **XP food** — appears when you carry supported food or XP-granting tea and lack its XP buff.
+  Click to eat/drink and stay seated for at least 10 seconds for **+5% XP from kills**.
   Not all food or Well Fed buffs qualify. Supported foods include Roasted Boar
   Meat, Brilliant Smallfish, Longjaw Mud Snapper, Crab Cake, Strider Stew,
-  Smoked Sagefish, Roast Raptor, and Twice-Spiced Raptor Slice.
+  Smoked Sagefish, Roast Raptor, Twice-Spiced Raptor Slice, Slitherskin Mackerel,
+  Mithril Head Trout, Sagefish Delight, Briny Seafood Stew, and Baked Salmon.
+  Selects the carried food/drink with the highest level
+  requirement you meet; equal-level ties use a fixed order, not stat bonuses.
   Recognized XP-bearing Well Fed variants count even when they also grant stats.
 - **Scroll of Intellect** — uses your highest usable rank (I–IV); hidden when
   you already have Intellect or Arcane Brilliance.
@@ -39,7 +44,7 @@ The remaining reminders are priest-only.
 Reminders hide during combat, while mounted, or while dead, and refresh when
 these states end. Camp Benefits and Cozy Sleeping Bag also hide inside dungeons.
 The food reminder also hides while moving. Position and reminder settings are
-saved per character. Other classes are not supported.
+saved per character.
 
 ## Commands
 
