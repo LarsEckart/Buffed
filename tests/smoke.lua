@@ -82,7 +82,7 @@ C_Container = {
     GetContainerItemID = function(bag, slot) return bags[bag][slot] end,
 }
 C_Item = { GetItemIconByID = function(id) return id + 100000 end }
-local spellIDs = { ["Power Word: Fortitude"] = 1244, ["Inner Fire"] = 588, ["Shadowguard"] = 18137 }
+local spellIDs = { ["Power Word: Fortitude"] = 1244, ["Inner Fire"] = 588, ["Shadowguard"] = 18137, ["Divine Spirit"] = 14752 }
 Enum = { SpellBookSpellBank = { Player = 0 } }
 C_Spell = { GetSpellInfo = function(name) return { iconID = 123, spellID = spellIDs[name] } end }
 C_SpellBook = { IsSpellInSpellBook = function(id, bank, overrides)
@@ -121,9 +121,10 @@ assert(BuffedDB.position.x == 80 and BuffedDB.position.y == -90)
 SlashCmdList.BUFFED("reset")
 assert(BuffedAnchor.point[4] == 0 and BuffedAnchor.point[5] == -160)
 -- Use semantic aliases so test assertions do not depend on the button order.
-local fortitude, fire, guard, food, intellect
+local fortitude, spirit, fire, guard, food, intellect
 for _, frame in ipairs(frames) do
     if frame.spell == "Power Word: Fortitude" then fortitude = frame
+    elseif frame.spell == "Divine Spirit" then spirit = frame
     elseif frame.spell == "Inner Fire" then fire = frame
     elseif frame.spell == "Shadowguard" then guard = frame end
 end
@@ -134,12 +135,30 @@ for _, frame in ipairs(frames) do
     if frame.item == "item:2681" then food = frame
     elseif frame.item == "item:2290" then intellect = frame end
 end
-assert(fortitude and fire and guard and food and intellect)
+assert(fortitude and spirit and fire and guard and food and intellect)
 bags[0] = {}
 event("BAG_UPDATE_DELAYED")
 assert(fortitude.shown and fire.shown, "missing buffs should appear")
 assert(fortitude.unit == "player" and not guard.shown, "unlearned Shadowguard should hide")
-for _, command in ipairs({ "spirit", "shadow", "form" }) do
+assert(not spirit.shown, "unlearned Divine Spirit should hide")
+learned["Divine Spirit"] = true
+event("SPELLS_CHANGED")
+assert(spirit.shown and spirit.unit == "player" and spirit.type == "spell",
+    "learning Divine Spirit should enable a self-cast reminder")
+assert(BuffedDB.enabled.spirit, "Divine Spirit should default on")
+for _, name in ipairs({ "Divine Spirit", "Prayer of Spirit" }) do
+    active = { name }
+    event("UNIT_AURA", "player")
+    assert(not spirit.shown, "Spirit name fallback should hide the reminder")
+end
+active = { { name = "Divine Spirit", spellId = 1 } }
+event("UNIT_AURA", "player")
+assert(spirit.shown, "an unknown Spirit ID must not match by name")
+SlashCmdList.BUFFED("spirit")
+assert(not spirit.shown and not BuffedDB.enabled.spirit)
+SlashCmdList.BUFFED("spirit")
+assert(spirit.shown and BuffedDB.enabled.spirit)
+for _, command in ipairs({ "shadow", "form" }) do
     SlashCmdList.BUFFED(command)
     assert(messages[#messages]:find("Unknown command", 1, true), "removed reminder must not be configurable")
     assert(BuffedDB.enabled[command] == nil)
@@ -151,6 +170,7 @@ assert(not fortitude.shown and not fire.shown, "active buffs should hide")
 learned["Shadowguard"] = true
 for _, group in ipairs({
     { button = fortitude, ids = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
+    { button = spirit, ids = { 14752, 14818, 14819, 27841, 27681 } },
     { button = fire, ids = { 588, 7128, 602, 1006, 10951, 10952 } },
     { button = guard, ids = { 18137, 19308, 19309, 19310, 19311, 19312 } },
 }) do

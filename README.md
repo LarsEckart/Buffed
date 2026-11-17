@@ -16,7 +16,7 @@ Camp Benefits is an informational reminder only.
   carried items. This icon cannot refresh the buff; visit a camp. Individual
   camp benefits are not checked.
 
-- **Power Word: Fortitude, Inner Fire, and Shadowguard** — only learned spells
+- **Power Word: Fortitude, Divine Spirit, Inner Fire, and Shadowguard** — only learned spells
   appear; equivalent prayer buffs also count.
 - **XP food** — appears when you carry supported food and lack its XP buff.
   Click to eat and stay seated for at least 10 seconds for **+5% XP from kills**.
@@ -43,7 +43,7 @@ saved per character. Other classes are not supported.
 | `/buffed unlock` | Drag the **Buffed** label to move the bar |
 | `/buffed lock` | Lock the bar |
 | `/buffed reset` | Reset its position |
-| `/buffed fortitude`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, or `camp` | Toggle that reminder |
+| `/buffed fortitude`, `spirit`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, or `camp` | Toggle that reminder |
 | `/buffed status` | Show diagnostics in chat and a copy window |
 
 If a reminder stays visible after buffing, run `/buffed status`, press **Ctrl+C**

@@ -224,6 +224,26 @@ data sources, and test procedures belong here or beside the relevant code.
   Remove Well-Rested to restore it; remove the bag to hide it. Check the
   `/buffed sleepingbag` toggle and confirm normal combat suppression.
 
+### Divine Spirit reminder
+
+- `spirit` uses the existing learned-spell, self-cast, out-of-combat reminder path.
+  Divine Spirit and Prayer of Spirit both satisfy it; the button casts Divine Spirit.
+- Individually verified Forever endpoints:
+  https://nether.wowhead.com/forever/tooltip/spell/14752
+  https://nether.wowhead.com/forever/tooltip/spell/14818
+  https://nether.wowhead.com/forever/tooltip/spell/14819
+  https://nether.wowhead.com/forever/tooltip/spell/27841
+  https://nether.wowhead.com/forever/tooltip/spell/27681
+  Divine Spirit ranks require levels 30/40/50/60 and grant 17/23/33/40 Spirit
+  for one hour. Prayer of Spirit requires level 60 and grants 40 Spirit for
+  one hour. No additional ranks or stacking rules are inferred.
+- Mock coverage includes learning, self-target attributes, each verified aura ID,
+  name fallback, unknown-ID rejection, and `/buffed spirit` toggling.
+- In-game validation remains pending: `/reload`, remove Divine Spirit, click its
+  reminder with another unit targeted, and confirm it buffs yourself and hides.
+  Verify the toggle and normal combat/mount/death suppression. Share an
+  out-of-combat `/buffed status` if the applied aura is not recognized.
+
 ### Verified aura IDs
 
 Each ID below was individually checked using Wowhead's Forever tooltip endpoint
@@ -235,6 +255,7 @@ https://nether.wowhead.com/forever/tooltip/spell/12176
 | --- | --- |
 | Power Word: Fortitude | 1243, 1244, 1245, 2791, 10937, 10938 |
 | Prayer of Fortitude | 21562, 21564 |
+| Divine Spirit / Prayer of Spirit | 14752, 14818, 14819, 27841, 27681 |
 | Inner Fire | 588, 7128, 602, 1006, 10951, 10952 |
 | Shadowguard | 18137, 19308, 19309, 19310, 19311, 19312 |
 | Scroll Intellect | 8096, 8097, 8098, 12176 |

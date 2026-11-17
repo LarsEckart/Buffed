@@ -12,6 +12,8 @@ local buffs = {
         icon = "Interface\\Icons\\inv_camelot_camping_campbenefits" },
     { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude",
         auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
+    { key = "spirit", name = "Divine Spirit", alternate = "Prayer of Spirit",
+        auraIDs = { 14752, 14818, 14819, 27841, 27681 } },
     { key = "fire", name = "Inner Fire", auraIDs = { 588, 7128, 602, 1006, 10951, 10952 } },
     { key = "shadowguard", name = "Shadowguard", auraIDs = { 18137, 19308, 19309, 19310, 19311, 19312 } },
     -- Each Well Fed ID's Forever buffspells explicitly includes +5% kill XP.
@@ -417,7 +419,7 @@ local function HandleCommand(message)
     local command = message:lower():match("^%s*(.-)%s*$")
     if command == "" or command == "help" then
         Print("/buffed unlock | lock | reset | status")
-        Print("Toggle a reminder: /buffed fortitude | fire | shadowguard | food | intellect | sleepingbag | camp")
+        Print("Toggle a reminder: /buffed fortitude | spirit | fire | shadowguard | food | intellect | sleepingbag | camp")
         return
     end
     if command == "status" then
