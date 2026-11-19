@@ -12,6 +12,9 @@ local buffs = {
     { key = "mark", name = "Mark of the Wild", alternate = "Gift of the Wild",
         auraIDs = { 1126, 5232, 6756, 5234, 8907, 9884, 9885, 21849, 21850 } },
     { key = "thorns", name = "Thorns", auraIDs = { 467, 782, 1075, 8914, 9756, 9910 } },
+    -- Each rank verified at the Forever spell endpoint; cooldown fields tested in-client.
+    { key = "grasp", name = "Nature's Grasp", cooldown = true,
+        auraIDs = { 16689, 16810, 16811, 16812, 16813, 17329 } },
     { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude",
         auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
     { key = "spirit", name = "Divine Spirit", alternate = "Prayer of Spirit",
@@ -28,13 +31,17 @@ local buffs = {
     -- Client-observed; verified: https://nether.wowhead.com/forever/tooltip/spell/429959
     { key = "sleepingbag", name = "Well-Rested", auraIDs = { 429959 },
         item = true, icon = "Interface\\Icons\\INV_Misc_Bag_BigBagofEnchantments" },
+    -- Informational only: no automatic equipment changes or click action.
+    -- https://nether.wowhead.com/forever/tooltip/item/9452
+    { key = "hydrocane", name = "Hydrocane", gear = true, reminderOnly = true,
+        icon = "Interface\\Icons\\INV_Staff_15" },
     { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance",
         auraIDs = { 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 } },
 }
 
 -- Items and informational reminders are shared; spell reminders are class-specific.
 local spellClasses = {
-    mark = "DRUID", thorns = "DRUID",
+    mark = "DRUID", thorns = "DRUID", grasp = "DRUID",
     fortitude = "PRIEST", spirit = "PRIEST", fire = "PRIEST", shadowguard = "PRIEST",
 }
 local classBuffs = {}
@@ -59,6 +66,8 @@ local buttons = {}
 local availability = {}
 local cachedActive, cachedDetails = {}, {}
 local hasAuraSnapshot = false
+local cachedCooldownReady = {}
+local cachedHydrocaneNeeded
 local CreateStatusWindow
 
 local function Print(message)
@@ -163,6 +172,9 @@ end
 -- Prefer the highest usable required character level; stat bonuses are not ranked.
 -- This is a verified allowlist, not an exhaustive list of Forever foods.
 local consumables = {
+    -- Required character level, not the linked effect's spell level.
+    -- https://nether.wowhead.com/forever/tooltip/item/9452
+    hydrocane = { { id = 9452, level = 27, name = "Hydrocane" } },
     -- No character-level requirement listed (item level 40 is not a use level).
     -- https://nether.wowhead.com/forever/tooltip/item/211527
     -- https://nether.wowhead.com/forever/tooltip/spell/429961
@@ -285,6 +297,30 @@ local function ItemTexture(id, fallback)
     return (icon and icon(id)) or fallback or "Interface\\Icons\\INV_Scroll_01"
 end
 
+local function HydrocaneNeeded()
+    -- User verified BREATH while underwater, UNKNOWN after the bar disappears.
+    -- IsSubmerged/IsSwimming both stayed true at the surface in this client.
+    -- Only called out of combat; no timer values or aura data are inspected.
+    if not GetMirrorTimerInfo or not GetInventoryItemID then return false end
+    if GetInventoryItemID("player", 16) == 9452 then return false end
+    for index = 1, 3 do
+        local timer = GetMirrorTimerInfo(index)
+        if timer == "BREATH" then return true end
+    end
+    return false
+end
+
+local function CooldownReady(buff, available)
+    if not CombatLocked() then
+        local info = available and C_Spell and C_Spell.GetSpellCooldown
+            and C_Spell.GetSpellCooldown(buff.name)
+        -- Only the out-of-combat API/fields confirmed in Forever are used.
+        cachedCooldownReady[buff.key] = not not (info and info.isEnabled
+            and (info.duration == 0 or info.startTime + info.duration <= GetTime()))
+    end
+    return cachedCooldownReady[buff.key]
+end
+
 local function HasBuff(active, buff)
     for _, id in ipairs(buff.auraIDs) do
         if active[id] then return true end
@@ -313,23 +349,28 @@ local function Refresh()
         return
     end
     local active = ActiveBuffs()
+    cachedHydrocaneNeeded = HydrocaneNeeded()
     -- User verified IsInInstance() returns true, "party" inside a Forever dungeon.
     local inInstance, instanceType = IsInInstance()
     local inDungeon = inInstance and instanceType == "party"
     local visible = 0
     for i, buff in ipairs(buffs) do
         local button = buttons[i]
-        local item = buff.item and FindConsumable(buff)
+        local item = (buff.item or buff.gear) and FindConsumable(buff)
         local available
-        if buff.reminderOnly then available = true
-        elseif buff.item then available = item ~= nil
+        if buff.item or buff.gear then available = item ~= nil
+        elseif buff.reminderOnly then available = true
         else available = not not Known(buff.name) end
         availability[buff.key] = available
         if buff.item then
             button:SetAttribute("item", item and ("item:" .. item.id) or nil)
             button.displayName = item and item.name or buff.name
         end
-        local missing = BuffedDB.enabled[buff.key] and available and not HasBuff(active, buff)
+        local needed
+        if buff.gear then needed = cachedHydrocaneNeeded
+        else needed = not HasBuff(active, buff) end
+        local ready = not buff.cooldown or CooldownReady(buff, available)
+        local missing = BuffedDB.enabled[buff.key] and available and needed and ready
         local dungeonSuppressed = inDungeon and (buff.key == "camp" or buff.key == "sleepingbag")
         if missing and not dungeonSuppressed and not (buff.key == "food" and moving) then
             button:ClearAllPoints()
@@ -395,7 +436,9 @@ local function Initialize()
         button:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.displayName or buff.name)
-            if buff.reminderOnly then
+            if buff.gear then
+                GameTooltip:AddLine("Breath timer active. Equip Hydrocane for 50% longer underwater breath. This icon is not clickable.", 1, 1, 1)
+            elseif buff.reminderOnly then
                 GameTooltip:AddLine("Camp Benefits missing. Visit a camp to refresh it. This icon is not clickable.", 1, 1, 1)
             elseif buff.key == "food" then
                 GameTooltip:AddLine("Click to eat. Remain seated for at least 10 seconds for +5% kill XP.", 1, 1, 1)
@@ -483,23 +526,35 @@ local function HandleCommand(message)
         if CombatLocked() then
             AddLine("Combat aura access blocked by client; conditional combat reminders disabled.")
             AddLine("Aura states, item availability and learned spells below are cached, not live.")
+            AddLine("Breath/equipment state below is also cached, not live.")
             if not hasAuraSnapshot then AddLine("No out-of-combat aura snapshot available.") end
         end
+        if not CombatLocked() then cachedHydrocaneNeeded = HydrocaneNeeded() end
         for _, buff in ipairs(buffs) do
             local available = availability[buff.key]
             if not CombatLocked() then
-                if buff.reminderOnly then available = true
-                elseif buff.item then available = FindConsumable(buff) ~= nil
+                if buff.item or buff.gear then available = FindConsumable(buff) ~= nil
+                elseif buff.reminderOnly then available = true
                 else available = not not Known(buff.name) end
                 availability[buff.key] = available
             end
+            local cooldownState
+            if buff.cooldown then
+                local ready = CooldownReady(buff, available)
+                cooldownState = ready == nil and ", cooldown unknown"
+                    or ready and ", cooldown ready" or ", cooldown not ready"
+                if CombatLocked() then cooldownState = cooldownState .. " (cached, not live)" end
+            end
             AddLine(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
                 .. (available == nil and ", availability/learned state unknown"
-                    or (buff.reminderOnly and ", reminder only"
-                        or buff.item and (available and ", usable item in bags" or ", no supported usable item")
+                    or ((buff.item or buff.gear) and (available and ", usable item in bags" or ", no supported usable item")
+                        or buff.reminderOnly and ", reminder only"
                         or (available and ", learned" or ", not learned")))
-                .. (not hasAuraSnapshot and ", aura unknown"
-                    or (HasBuff(active, buff) and ", active" or ", missing")))
+                .. (buff.gear and (cachedHydrocaneNeeded == nil and ", breath/equipment state unknown"
+                        or cachedHydrocaneNeeded and ", breath timer active, unequipped" or ", not needed")
+                    or not hasAuraSnapshot and ", aura unknown"
+                    or (HasBuff(active, buff) and ", active" or ", missing"))
+                .. (cooldownState or ""))
         end
         AddLine((CombatLocked() and "Cached player buffs via " or "Player buffs via ")
             .. (C_UnitAuras and C_UnitAuras.GetBuffDataByIndex
@@ -544,6 +599,7 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("UNIT_AURA")
 events:RegisterEvent("SPELLS_CHANGED")
+if class == "DRUID" then events:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
 events:RegisterEvent("BAG_UPDATE_DELAYED")
 events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("PLAYER_ALIVE")
@@ -552,6 +608,9 @@ events:RegisterEvent("PLAYER_UNGHOST")
 events:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 events:RegisterEvent("PLAYER_STARTED_MOVING")
 events:RegisterEvent("PLAYER_STOPPED_MOVING")
+events:RegisterEvent("MIRROR_TIMER_START")
+events:RegisterEvent("MIRROR_TIMER_STOP")
+events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 local function HandleEvent(_, event, unit)
     if event == "PLAYER_REGEN_DISABLED" then combatEventActive = true
     elseif event == "PLAYER_REGEN_ENABLED" then combatEventActive = false end
@@ -566,6 +625,14 @@ local function HandleEvent(_, event, unit)
         -- Avoid inspecting restricted event payloads as well as the aura APIs.
         if CombatLocked() then return end
         if unit ~= "player" then return end
+    end
+    if (event == "MIRROR_TIMER_START" or event == "MIRROR_TIMER_STOP") and not CombatLocked() then
+        -- Timer events can precede GetMirrorTimerInfo's updated state. Recheck
+        -- once next frame, then remove the handler (no continuous polling).
+        events:SetScript("OnUpdate", function(self)
+            self:SetScript("OnUpdate", nil)
+            RunSafely("Deferred breath timer refresh", Refresh)
+        end)
     end
     -- Track transitions even in combat, without touching secure frames there.
     if event == "PLAYER_STARTED_MOVING" then moving = true

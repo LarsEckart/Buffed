@@ -149,6 +149,28 @@ or ambiguous, ask for an in-game tooltip/API result instead of guessing.
 - Gameplay database lookups do not prove client API compatibility. Test
   Forever's actual APIs in-game; do not assume Classic/Retail API behavior.
 
+## Client API verification workflow
+
+- Reuse previously verified API paths for equivalent features. Adding another
+  ordinary learned-spell/missing-aura reminder does not require repeating the
+  same API probes. Verify its Forever gameplay data separately as usual.
+- Ask for a small in-game probe when a feature introduces an unverified API or
+  behavior, not for every new spell. Check these notes and existing code first.
+- Make the first probe precise: print labelled fields needed by the code rather
+  than dumping an entire table with unclear field/value ordering. Specify the
+  conditions to test (for example, out of combat, ready and just after casting).
+  Batch the necessary labelled fields into one command to avoid extra rounds.
+- Cooldown precedent: the user verified
+  `C_Spell.GetSpellCooldown("Nature's Grasp")` out of combat returns a table
+  with `startTime`, `duration`, and `isEnabled`. Ready was 0/0/true; after
+  casting it was 1949.686/60/true. Reuse this established path for equivalent
+  out-of-combat reminders; do not ask to rediscover the table shape.
+- This evidence does not establish in-combat access, every spell's behavior,
+  cooldown rate modifiers, charges, global-cooldown handling, or event delivery
+  at expiry. Test newly relevant behavior specifically rather than repeating
+  already answered questions. SPELL_UPDATE_COOLDOWN expiry delivery still needs
+  in-game validation for Nature's Grasp.
+
 ## Combat API limits and feasibility checks
 
 **Check feasibility before implementing a feature, and push back explicitly when
@@ -290,6 +312,42 @@ data sources, and test procedures belong here or beside the relevant code.
   confirm both reminders hide/return while other reminders remain unchanged.
   Repeat a transition in combat and verify the result after combat ends.
 
+### Hydrocane reminder
+
+- Informational-only `hydrocane` reminder for all classes; no equip action,
+  automatic swapping, previous-weapon tracking, or combat reminder.
+- Verified Forever item 9452 (Hydrocane), icon INV_Staff_15, required character
+  level 27, and equipped effect: underwater breath lasts 50% longer, not unlimited.
+  Sources: https://nether.wowhead.com/forever/tooltip/item/9452 and
+  https://nether.wowhead.com/forever/tooltip/spell/11789 (the effect's level 20
+  is not the item's character-level requirement).
+- User's out-of-combat tests: IsSubmerged and IsSwimming both returned true
+  underwater and at the surface. GetMirrorTimerInfo(2) returned BREATH underwater
+  and UNKNOWN with zero/empty fields after the breath bar disappeared at the
+  surface. Check only timer type across slots 1–3, not numeric timer values.
+  This indicates an active breath timer, not exact physical submersion: the
+  reminder can persist while breath replenishes at the surface, and will not
+  appear underwater without a breath timer.
+- Requires a carried item and level 27+, active BREATH timer, and no Hydrocane
+  in main-hand slot 16. Existing suppression and secure visibility rules apply.
+  Refresh on MIRROR_TIMER_START/STOP, PLAYER_EQUIPMENT_CHANGED, and existing
+  events; no polling or combat timer/equipment reads. A user reported the icon
+  remaining after leaving water until movement stopped. Timer events now also
+  schedule a one-shot next-frame refresh via a self-removing OnUpdate handler,
+  to handle GetMirrorTimerInfo still returning the old state during the event.
+  This event/API ordering is a suspected cause, not yet confirmed in-game.
+  Mocks cover stale start/stop state and combat entry before the callback;
+  verify leaving water while continuing to move hides the icon after the breath
+  bar disappears. Status uses a cached
+  breath/equipment condition in combat, explicitly labelled cached.
+- Mock coverage: ownership, required level, all timer slots, non-breath timers,
+  equipment changes, toggle, no secure action, mount/death suppression, and
+  combat scan/mutation guards. Actual event delivery and inventory API behavior
+  still need Forever validation: /reload with Hydrocane in bags, submerge until
+  the breath bar appears, equip/unequip it, surface until the bar disappears,
+  and check /buffed hydrocane plus combat transitions. The icon must not equip
+  anything on click. Report /buffed status if it fails to refresh.
+
 ### Cozy Sleeping Bag reminder
 
 - `sleepingbag` uses carried item 211527 (Cozy Sleeping Bag) and aura 429959
@@ -330,6 +388,28 @@ data sources, and test procedures belong here or beside the relevant code.
   `/reload`, remove Mark, click with another unit targeted, confirm self-cast
   and icon disappearance. Check Gift, food from bags, toggles, combat/mount/death
   suppression. Share out-of-combat `/buffed status` if detection fails.
+
+### Druid Nature's Grasp reminder
+
+- Druid-only `grasp`: learned, missing aura, and off cooldown. Existing self-cast
+  secure button and combat/mount/death suppression apply; no combat cooldown reads.
+- Individually verified Forever spell endpoints
+  `https://nether.wowhead.com/forever/tooltip/spell/{ID}` for
+  16689/16810/16811/16812/16813/17329: Nature's Grasp, levels
+  10/18/28/38/48/58, one-minute cooldown, 45-second buff, one melee hit roots
+  the attacker, castable while shapeshifted. No other ranks inferred.
+- User verified out-of-combat `C_Spell.GetSpellCooldown("Nature's Grasp")`:
+  startTime=0, duration=0, isEnabled=true when ready; startTime=1949.686,
+  duration=60, isEnabled=true after casting. Only these fields are used.
+  Missing data fails closed. Status reports cooldown readiness cached in combat.
+- Event-driven refresh on SPELL_UPDATE_COOLDOWN (druids only); no polling.
+  Actual Forever event delivery at cooldown expiry remains unverified.
+- Mock coverage includes learning, cooldown/expiry/disabled/unavailable states,
+  all six aura IDs, name fallback, unknown-ID rejection, toggle, class isolation,
+  and combat scan suppression. In-game: `/reload`, click with another target,
+  confirm hiding after casting and automatic return at cooldown expiry without
+  moving. Test `/buffed grasp`, mount/death/combat transitions, and share status
+  if it fails.
 
 ### Druid Thorns reminder
 

@@ -11,6 +11,16 @@ local function recordScan()
     assert(not combat and not dead and not mounted, "unnecessary or restricted scan while suppressed")
     scans = scans + 1
 end
+local mirrorTimers, mainHand = {}, nil
+function GetMirrorTimerInfo(index)
+    recordScan()
+    return mirrorTimers[index] or "UNKNOWN", 0, 0, 0, 0, "", 0
+end
+function GetInventoryItemID(unit, slot)
+    recordScan()
+    assert(unit == "player" and slot == 16)
+    return mainHand
+end
 -- Conservative protection model: reject mutations through secure parents or
 -- relative anchors too.
 local function protected(frame)
@@ -84,7 +94,17 @@ C_Container = {
 C_Item = { GetItemIconByID = function(id) return id + 100000 end }
 local spellIDs = { ["Power Word: Fortitude"] = 1244, ["Inner Fire"] = 588, ["Shadowguard"] = 18137, ["Divine Spirit"] = 14752 }
 Enum = { SpellBookSpellBank = { Player = 0 } }
-C_Spell = { GetSpellInfo = function(name) return { iconID = 123, spellID = spellIDs[name] } end }
+local cooldownInfo = { startTime = 0, duration = 0, isEnabled = true }
+local now = 2000
+function GetTime() return now end
+C_Spell = {
+    GetSpellInfo = function(name) return { iconID = 123, spellID = spellIDs[name] } end,
+    GetSpellCooldown = function(name)
+        recordScan()
+        assert(name == "Nature's Grasp")
+        return cooldownInfo
+    end,
+}
 C_SpellBook = { IsSpellInSpellBook = function(id, bank, overrides)
     recordScan()
     assert(type(id) == "number", "spellbook lookup requires an ID, not a name")
@@ -263,6 +283,106 @@ event("UNIT_AURA", "player")
 assert(guard.shown, "depleted Shadowguard should reappear")
 SlashCmdList.BUFFED("shadowguard")
 assert(not guard.shown)
+
+-- Hydrocane is an informational bag/equipment/breath-timer reminder, not an aura.
+assert(BuffedDB.enabled.hydrocane)
+assert(frames[1].events.MIRROR_TIMER_START and frames[1].events.MIRROR_TIMER_STOP
+    and frames[1].events.PLAYER_EQUIPMENT_CHANGED)
+level, bags[0], mirrorTimers[2] = 27, { 9452 }, "BREATH"
+event("MIRROR_TIMER_START", "BREATH")
+local hydrocane
+for _, frame in ipairs(frames) do
+    if frame.icon and frame.icon.SetTextureArgs and frame.icon.SetTextureArgs[1] == 109452 then
+        hydrocane = frame
+    end
+end
+assert(hydrocane and hydrocane.shown)
+assert(hydrocane.type == nil and hydrocane.item == nil and hydrocane.spell == nil,
+    "Hydrocane must have no equip/cast/click action")
+level = 26
+event("PLAYER_LEVEL_UP")
+assert(not hydrocane.shown, "Hydrocane requires level 27")
+level = 27
+event("PLAYER_LEVEL_UP")
+assert(hydrocane.shown)
+mainHand = 9452
+event("PLAYER_EQUIPMENT_CHANGED", 16)
+assert(not hydrocane.shown, "equipped Hydrocane must hide the reminder")
+mainHand = 123
+for index = 1, 3 do
+    mirrorTimers = { [index] = "BREATH" }
+    event("MIRROR_TIMER_START", "BREATH")
+    assert(hydrocane.shown, "BREATH need not occupy slot 2")
+end
+mirrorTimers = { "FATIGUE", "FEIGNDEATH" }
+event("MIRROR_TIMER_STOP", "BREATH")
+assert(not hydrocane.shown, "surface/other timers must not trigger Hydrocane")
+mirrorTimers[2] = "BREATH"
+event("MIRROR_TIMER_START", "BREATH")
+SlashCmdList.BUFFED("hydrocane")
+assert(not hydrocane.shown and not BuffedDB.enabled.hydrocane)
+SlashCmdList.BUFFED("hydrocane")
+assert(hydrocane.shown)
+bags[0] = {}
+event("BAG_UPDATE_DELAYED")
+assert(not hydrocane.shown, "no carried Hydrocane means no reminder")
+bags[0] = { 9452 }
+event("BAG_UPDATE_DELAYED")
+assert(hydrocane.shown)
+mounted = true
+event("PLAYER_MOUNT_DISPLAY_CHANGED")
+assert(not hydrocane.shown)
+mounted, dead = false, true
+event("PLAYER_DEAD")
+assert(not hydrocane.shown)
+dead = false
+event("PLAYER_UNGHOST")
+assert(hydrocane.shown)
+before, previousScans = mutations, scans
+event("PLAYER_REGEN_DISABLED")
+combat = true
+mirrorTimers = {}
+event("MIRROR_TIMER_STOP", "BREATH")
+event("PLAYER_EQUIPMENT_CHANGED", 16)
+SlashCmdList.BUFFED("status")
+assert(scans == previousScans and mutations == before,
+    "combat timer/equipment events and diagnostics must not read live data or mutate secure UI")
+assert(combatStatusBox.SetTextArgs[1]:find("Breath/equipment state below is also cached, not live.", 1, true))
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(not hydrocane.shown, "post-combat refresh must re-read the breath timer")
+-- Reproduce the timer API updating only AFTER the event: no movement needed.
+local function nextFrame()
+    local update = frames[1].OnUpdate
+    assert(update, "timer event should schedule a one-shot refresh")
+    update(frames[1], 0.016)
+    assert(not frames[1].OnUpdate, "one-shot handler must remove itself")
+end
+mirrorTimers[2] = "BREATH"
+event("MIRROR_TIMER_START", "BREATH")
+nextFrame()
+assert(hydrocane.shown)
+event("MIRROR_TIMER_STOP", "BREATH")
+assert(hydrocane.shown, "mock timer API is deliberately stale during stop event")
+mirrorTimers = {}
+nextFrame()
+assert(not hydrocane.shown, "must hide without a movement/other event after timer API updates")
+event("MIRROR_TIMER_START", "BREATH")
+mirrorTimers[2] = "BREATH"
+nextFrame()
+assert(hydrocane.shown, "deferred refresh also handles stale start events")
+-- If combat starts between event and callback, the callback must not scan/mutate.
+event("MIRROR_TIMER_STOP", "BREATH")
+event("PLAYER_REGEN_DISABLED")
+combat = true
+before, previousScans = mutations, scans
+mirrorTimers = {}
+nextFrame()
+assert(scans == previousScans and mutations == before)
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(not hydrocane.shown)
+level, mainHand, bags[0] = 22, nil, {}
 
 -- Sleeping bag ownership and any Well-Rested stack use the normal item path.
 assert(BuffedDB.enabled.sleepingbag)
@@ -645,14 +765,16 @@ BuffedDB = nil
 function UnitClass() return "Druid", "DRUID" end
 spellIDs["Mark of the Wild"] = 1126
 spellIDs.Thorns = 467
+spellIDs["Nature's Grasp"] = 16689
 assert(loadfile("Buffed.lua"))("Buffed")
 event("PLAYER_ENTERING_WORLD")
-local mark, thorns, druidFood, druidCamp
+local mark, thorns, grasp, druidFood, druidCamp
 local secureButtons = 0
 for _, frame in ipairs(frames) do
     if frame.type == "spell" then
         if frame.spell == "Mark of the Wild" then mark = frame
         elseif frame.spell == "Thorns" then thorns = frame
+        elseif frame.spell == "Nature's Grasp" then grasp = frame
         else error("druids must not get priest spells") end
     elseif frame.type == "item" then druidFood = druidFood or frame
     elseif frame.icon and frame.icon.SetTextureArgs
@@ -661,8 +783,42 @@ for _, frame in ipairs(frames) do
     end
     if frame.type then secureButtons = secureButtons + 1 end
 end
-assert(secureButtons == 5 and mark and thorns and druidFood and druidCamp,
-    "druid scope is Mark, Thorns and all shared reminders")
+assert(secureButtons == 6 and mark and thorns and grasp and druidFood and druidCamp,
+    "druid scope includes Nature's Grasp and all shared reminders")
+assert(frames[1].events.SPELL_UPDATE_COOLDOWN)
+assert(not grasp.shown and BuffedDB.enabled.grasp)
+learned["Nature's Grasp"] = true
+event("SPELLS_CHANGED")
+assert(grasp.shown and grasp.unit == "player" and grasp.type == "spell")
+cooldownInfo = { startTime = 1949.686, duration = 60, isEnabled = true }
+event("SPELL_UPDATE_COOLDOWN")
+assert(not grasp.shown)
+now = 2010
+event("SPELL_UPDATE_COOLDOWN")
+assert(grasp.shown, "expired cooldown must restore reminder")
+cooldownInfo = { startTime = 0, duration = 0, isEnabled = false }
+event("SPELL_UPDATE_COOLDOWN")
+assert(not grasp.shown)
+cooldownInfo = nil
+event("SPELL_UPDATE_COOLDOWN")
+assert(not grasp.shown, "unavailable cooldown data must not claim ready")
+cooldownInfo = { startTime = 0, duration = 0, isEnabled = true }
+for _, id in ipairs({ 16689, 16810, 16811, 16812, 16813, 17329 }) do
+    active = { { name = "client aura", spellId = id } }
+    event("UNIT_AURA", "player")
+    assert(not grasp.shown)
+end
+active = { "Nature's Grasp" }
+event("UNIT_AURA", "player")
+assert(not grasp.shown)
+active = { { name = "Nature's Grasp", spellId = 999999 } }
+event("UNIT_AURA", "player")
+assert(grasp.shown)
+active = {}
+SlashCmdList.BUFFED("grasp")
+assert(not grasp.shown and not BuffedDB.enabled.grasp)
+SlashCmdList.BUFFED("grasp")
+assert(grasp.shown)
 assert(druidCamp.shown and BuffedDB.enabled.camp)
 assert(druidCamp.type == nil and druidCamp.spell == nil and druidCamp.item == nil)
 active = { { name = "Camp Benefits", spellId = 1229741 } }
@@ -735,6 +891,7 @@ local beforeCombat = scans
 combat = true
 event("PLAYER_REGEN_DISABLED")
 event("UNIT_AURA", "player")
+event("SPELL_UPDATE_COOLDOWN")
 SlashCmdList.BUFFED("status")
 assert(scans == beforeCombat, "druid combat diagnostics must use cached data")
 combat = false
@@ -768,6 +925,7 @@ for _, classToken in ipairs({ "PRIEST", "DRUID", "WARRIOR", "MAGE", "ROGUE",
         elseif frame.type == "spell" then
             spellButtons[#spellButtons + 1] = frame
             local druidSpell = frame.spell == "Mark of the Wild" or frame.spell == "Thorns"
+                or frame.spell == "Nature's Grasp"
             assert((classToken == "DRUID" and druidSpell)
                 or (classToken == "PRIEST" and not druidSpell), "class spell leaked")
         elseif frame.icon and frame.icon.SetTextureArgs
@@ -776,7 +934,7 @@ for _, classToken in ipairs({ "PRIEST", "DRUID", "WARRIOR", "MAGE", "ROGUE",
         end
     end
     assert(#itemButtons == 3 and sharedCamp and sharedCamp.shown)
-    assert(#spellButtons == (classToken == "PRIEST" and 4 or classToken == "DRUID" and 2 or 0))
+    assert(#spellButtons == (classToken == "PRIEST" and 4 or classToken == "DRUID" and 3 or 0))
     bags[0] = { 2681, 955, 211527 }
     event("BAG_UPDATE_DELAYED")
     local selected = {}
