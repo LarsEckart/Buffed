@@ -314,8 +314,10 @@ data sources, and test procedures belong here or beside the relevant code.
 
 ### Fishing lure reminder
 
-- Shared, informational-only `/buffed fishing`: exact main-hand item 6256,
-  carried allowlisted lure, and GetWeaponEnchantInfo's first return false.
+- Shared, informational-only `/buffed fishing`: exact main-hand item 6256
+  and GetWeaponEnchantInfo's first return false. Carried lures are optional:
+  show the selected lure icon if carried, otherwise item 6256's fishing-pole
+  icon (verified icon inv_fishingpole_02). Tooltip distinguishes both cases.
   No click action, skill check, automatic equipment swap, or combat reads.
   Any temporary main-hand enchant suppresses it; no enchant-ID mapping inferred.
 - User verified out of combat: false/nil/nil/nil without a lure;
@@ -336,7 +338,8 @@ data sources, and test procedures belong here or beside the relevant code.
   For further validation: equip 6256 with a lure in bags, apply it, let it expire without moving,
   swap to staff, remove lures, toggle /buffed fishing, and check suppression.
   Report /buffed status if stale; do not assume expiry emits an event.
-- Mocks cover six lure IDs, ownership, exact pole, enchant applied/removed,
+- Mocks cover six lure IDs, optional ownership and pole-icon fallback, exact
+  pole, enchant applied/removed with and without carried lures,
   toggle, no click action, and combat inventory/status scan and mutation guards.
 
 ### Hydrocane reminder

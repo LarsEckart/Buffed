@@ -401,12 +401,15 @@ local function Refresh()
         elseif buff.racial then needed = true -- cooldown-ready reminder, no aura mapping assumed
         else needed = not HasBuff(active, buff) end
         local ready = not buff.cooldown or CooldownReady(buff, available)
-        local missing = BuffedDB.enabled[buff.key] and available and needed and ready
+        local missing = BuffedDB.enabled[buff.key] and (available or buff.supplies) and needed and ready
         local dungeonSuppressed = inDungeon and (buff.key == "camp" or buff.key == "sleepingbag")
         if missing and not dungeonSuppressed and not (buff.key == "food" and moving) then
             button:ClearAllPoints()
             button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", visible * 42, -4)
-            button.icon:SetTexture(item and ItemTexture(item.id, buff.icon) or buff.icon or SpellTexture(buff.name) or 136243)
+            button.noLure = buff.supplies and not item
+            button.displayName = buff.supplies and (item and item.name or "Fishing Pole") or button.displayName
+            button.icon:SetTexture(buff.supplies and not item and ItemTexture(6256, "Interface\\Icons\\INV_Fishingpole_02")
+                or item and ItemTexture(item.id, buff.icon) or buff.icon or SpellTexture(buff.name) or 136243)
             button:Show()
             visible = visible + 1
         else
@@ -468,7 +471,9 @@ local function Initialize()
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.displayName or buff.name)
             if buff.supplies then
-                GameTooltip:AddLine("Fishing Pole equipped without a temporary enchant; lure in bags. Check its Fishing skill requirement. Remember your staff! This icon is not clickable.", 1, 1, 1)
+                GameTooltip:AddLine(self.noLure
+                    and "Fishing Pole equipped without a temporary enchant; no supported lure in bags. Remember your staff! This icon is not clickable."
+                    or "Fishing Pole equipped without a temporary enchant; lure in bags. Check its Fishing skill requirement. Remember your staff! This icon is not clickable.", 1, 1, 1)
             elseif buff.gear then
                 GameTooltip:AddLine("Breath timer active. Equip Hydrocane for 50% longer underwater breath. This icon is not clickable.", 1, 1, 1)
             elseif buff.reminderOnly then

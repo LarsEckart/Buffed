@@ -47,8 +47,9 @@ only when learned and missing; click to cast on yourself.
   breath. Hides once equipped or the breath bar disappears, without needing to
   stop moving; does not restore
   your previous weapon automatically.
-- **Fishing lure** — informational icon when Fishing Pole (6256) is equipped,
-  a supported lure is in your bags, and the pole has no temporary enchant.
+- **Fishing lure** — informational icon when Fishing Pole (6256) is equipped
+  without a temporary enchant. Shows a carried lure's icon, or the fishing-pole
+  icon if you have no supported lures.
   Supports Shiny Bauble, Nightcrawlers, Bright Baubles, Aquadynamic Fish
   Attractor/Lens, and Flesh Eating Worm. Not clickable; Fishing skill is not
   checked. A handy reminder to switch back to your staff!

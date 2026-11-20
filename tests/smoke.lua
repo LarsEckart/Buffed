@@ -413,9 +413,15 @@ event("PLAYER_EQUIPMENT_CHANGED")
 assert(not fishing.shown)
 mainHand, bags[0] = 6256, {}
 event("BAG_UPDATE_DELAYED")
-assert(not fishing.shown)
+assert(fishing.shown and fishing.noLure and fishing.displayName == "Fishing Pole")
+assert(fishing.icon.SetTextureArgs[1] == 106256, "no lure uses the pole icon")
+enchanted = true
+event("UNIT_INVENTORY_CHANGED", "player")
+assert(not fishing.shown, "enchanted pole hides even without carried lures")
+enchanted = false
 bags[0] = { 6532 }
 event("BAG_UPDATE_DELAYED")
+assert(fishing.shown and not fishing.noLure and fishing.icon.SetTextureArgs[1] == 106532)
 SlashCmdList.BUFFED("fishing")
 assert(not fishing.shown)
 SlashCmdList.BUFFED("fishing")
