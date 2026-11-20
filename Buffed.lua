@@ -40,6 +40,8 @@ local buffs = {
     -- https://nether.wowhead.com/forever/tooltip/item/9452
     { key = "hydrocane", name = "Hydrocane", gear = true, reminderOnly = true,
         icon = "Interface\\Icons\\INV_Staff_15" },
+    { key = "fishing", name = "Fishing lure", supplies = true, reminderOnly = true,
+        icon = "Interface\\Icons\\INV_Misc_Gem_Variety_02" },
     { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance",
         auraIDs = { 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 } },
 }
@@ -72,6 +74,7 @@ local availability = {}
 local cachedActive, cachedDetails = {}, {}
 local hasAuraSnapshot = false
 local cachedCooldownReady = {}
+local cachedFishingNeeded
 local cachedHydrocaneNeeded
 local CreateStatusWindow
 
@@ -177,6 +180,16 @@ end
 -- Prefer the highest usable required character level; stat bonuses are not ranked.
 -- This is a verified allowlist, not an exhaustive list of Forever foods.
 local consumables = {
+    -- Verified individually: https://nether.wowhead.com/forever/tooltip/item/{ID}
+    -- Ownership only; fishing skill is not checked. Informational, not clickable.
+    fishing = {
+        { id = 6532, level = 1, name = "Bright Baubles" },
+        { id = 6529, level = 1, name = "Shiny Bauble" },
+        { id = 6530, level = 1, name = "Nightcrawlers" },
+        { id = 6533, level = 1, name = "Aquadynamic Fish Attractor" },
+        { id = 6811, level = 1, name = "Aquadynamic Fish Lens" },
+        { id = 7307, level = 1, name = "Flesh Eating Worm" },
+    },
     -- Required character level, not the linked effect's spell level.
     -- https://nether.wowhead.com/forever/tooltip/item/9452
     hydrocane = { { id = 9452, level = 27, name = "Hydrocane" } },
@@ -302,6 +315,16 @@ local function ItemTexture(id, fallback)
     return (icon and icon(id)) or fallback or "Interface\\Icons\\INV_Scroll_01"
 end
 
+local function FishingNeeded()
+    -- User verified false without a lure, true with one (enchant ID 265).
+    -- Any temporary main-hand enchant suppresses this reminder.
+    if not GetInventoryItemID or not GetWeaponEnchantInfo then return nil end
+    if GetInventoryItemID("player", 16) ~= 6256 then return false end
+    local enchanted = GetWeaponEnchantInfo()
+    if enchanted == nil then return nil end
+    return not enchanted
+end
+
 local function HydrocaneNeeded()
     -- User verified BREATH while underwater, UNKNOWN after the bar disappears.
     -- IsSubmerged/IsSwimming both stayed true at the surface in this client.
@@ -355,15 +378,16 @@ local function Refresh()
     end
     local active = ActiveBuffs()
     cachedHydrocaneNeeded = HydrocaneNeeded()
+    cachedFishingNeeded = FishingNeeded()
     -- User verified IsInInstance() returns true, "party" inside a Forever dungeon.
     local inInstance, instanceType = IsInInstance()
     local inDungeon = inInstance and instanceType == "party"
     local visible = 0
     for i, buff in ipairs(buffs) do
         local button = buttons[i]
-        local item = (buff.item or buff.gear) and FindConsumable(buff)
+        local item = (buff.item or buff.gear or buff.supplies) and FindConsumable(buff)
         local available
-        if buff.item or buff.gear then available = item ~= nil
+        if buff.item or buff.gear or buff.supplies then available = item ~= nil
         elseif buff.reminderOnly then available = true
         else available = not not Known(buff.name) end
         availability[buff.key] = available
@@ -372,7 +396,8 @@ local function Refresh()
             button.displayName = item and item.name or buff.name
         end
         local needed
-        if buff.gear then needed = cachedHydrocaneNeeded
+        if buff.supplies then needed = cachedFishingNeeded
+        elseif buff.gear then needed = cachedHydrocaneNeeded
         elseif buff.racial then needed = true -- cooldown-ready reminder, no aura mapping assumed
         else needed = not HasBuff(active, buff) end
         local ready = not buff.cooldown or CooldownReady(buff, available)
@@ -442,7 +467,9 @@ local function Initialize()
         button:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.displayName or buff.name)
-            if buff.gear then
+            if buff.supplies then
+                GameTooltip:AddLine("Fishing Pole equipped without a temporary enchant; lure in bags. Check its Fishing skill requirement. Remember your staff! This icon is not clickable.", 1, 1, 1)
+            elseif buff.gear then
                 GameTooltip:AddLine("Breath timer active. Equip Hydrocane for 50% longer underwater breath. This icon is not clickable.", 1, 1, 1)
             elseif buff.reminderOnly then
                 GameTooltip:AddLine("Camp Benefits missing. Visit a camp to refresh it. This icon is not clickable.", 1, 1, 1)
@@ -532,14 +559,17 @@ local function HandleCommand(message)
         if CombatLocked() then
             AddLine("Combat aura access blocked by client; conditional combat reminders disabled.")
             AddLine("Aura states, item availability and learned spells below are cached, not live.")
-            AddLine("Breath/equipment state below is also cached, not live.")
+            AddLine("Breath/equipment/enchant state below is also cached, not live.")
             if not hasAuraSnapshot then AddLine("No out-of-combat aura snapshot available.") end
         end
-        if not CombatLocked() then cachedHydrocaneNeeded = HydrocaneNeeded() end
+        if not CombatLocked() then
+            cachedHydrocaneNeeded = HydrocaneNeeded()
+            cachedFishingNeeded = FishingNeeded()
+        end
         for _, buff in ipairs(buffs) do
             local available = availability[buff.key]
             if not CombatLocked() then
-                if buff.item or buff.gear then available = FindConsumable(buff) ~= nil
+                if buff.item or buff.gear or buff.supplies then available = FindConsumable(buff) ~= nil
                 elseif buff.reminderOnly then available = true
                 else available = not not Known(buff.name) end
                 availability[buff.key] = available
@@ -553,10 +583,13 @@ local function HandleCommand(message)
             end
             AddLine(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
                 .. (available == nil and ", availability/learned state unknown"
-                    or ((buff.item or buff.gear) and (available and ", usable item in bags" or ", no supported usable item")
+                    or (buff.supplies and (available and ", lure in bags (skill not checked)" or ", no supported lure in bags")
+                        or (buff.item or buff.gear) and (available and ", usable item in bags" or ", no supported usable item")
                         or buff.reminderOnly and ", reminder only"
                         or (available and ", learned" or ", not learned")))
-                .. (buff.gear and (cachedHydrocaneNeeded == nil and ", breath/equipment state unknown"
+                .. (buff.supplies and (cachedFishingNeeded == nil and ", pole/enchant state unknown"
+                        or cachedFishingNeeded and ", pole equipped without temporary enchant" or ", not needed")
+                    or buff.gear and (cachedHydrocaneNeeded == nil and ", breath/equipment state unknown"
                         or cachedHydrocaneNeeded and ", breath timer active, unequipped" or ", not needed")
                     or not hasAuraSnapshot and ", aura unknown"
                     or (HasBuff(active, buff) and ", active" or ", missing"))
@@ -617,6 +650,7 @@ events:RegisterEvent("PLAYER_STOPPED_MOVING")
 events:RegisterEvent("MIRROR_TIMER_START")
 events:RegisterEvent("MIRROR_TIMER_STOP")
 events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+events:RegisterEvent("UNIT_INVENTORY_CHANGED")
 local function HandleEvent(_, event, unit)
     if event == "PLAYER_REGEN_DISABLED" then combatEventActive = true
     elseif event == "PLAYER_REGEN_ENABLED" then combatEventActive = false end

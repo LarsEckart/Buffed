@@ -47,6 +47,11 @@ only when learned and missing; click to cast on yourself.
   breath. Hides once equipped or the breath bar disappears, without needing to
   stop moving; does not restore
   your previous weapon automatically.
+- **Fishing lure** — informational icon when Fishing Pole (6256) is equipped,
+  a supported lure is in your bags, and the pole has no temporary enchant.
+  Supports Shiny Bauble, Nightcrawlers, Bright Baubles, Aquadynamic Fish
+  Attractor/Lens, and Flesh Eating Worm. Not clickable; Fishing skill is not
+  checked. A handy reminder to switch back to your staff!
 - **Cozy Sleeping Bag** — appears when you carry the bag and lack Well-Rested.
   Click to unroll, then rest inside for at least one minute. Any stack of
   Well-Rested hides the reminder.
@@ -64,7 +69,7 @@ saved per character.
 | `/buffed unlock` | Drag the **Buffed** label to move the bar |
 | `/buffed lock` | Lock the bar |
 | `/buffed reset` | Reset its position |
-| `/buffed mark`, `thorns`, `grasp`, `skysight`, `fortitude`, `spirit`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, `hydrocane`, or `camp` | Toggle a reminder supported by your class |
+| `/buffed mark`, `thorns`, `grasp`, `skysight`, `fortitude`, `spirit`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, `hydrocane`, `fishing`, or `camp` | Toggle a reminder supported by your class |
 | `/buffed status` | Show diagnostics in chat and a copy window |
 
 If a reminder stays visible after buffing, run `/buffed status`, press **Ctrl+C**

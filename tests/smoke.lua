@@ -12,6 +12,11 @@ local function recordScan()
     scans = scans + 1
 end
 local mirrorTimers, mainHand = {}, nil
+local enchanted = false
+function GetWeaponEnchantInfo()
+    recordScan()
+    return enchanted, enchanted and 598657 or nil, enchanted and 0 or nil, enchanted and 265 or nil
+end
 function GetMirrorTimerInfo(index)
     recordScan()
     return mirrorTimers[index] or "UNKNOWN", 0, 0, 0, 0, "", 0
@@ -347,7 +352,7 @@ event("PLAYER_EQUIPMENT_CHANGED", 16)
 SlashCmdList.BUFFED("status")
 assert(scans == previousScans and mutations == before,
     "combat timer/equipment events and diagnostics must not read live data or mutate secure UI")
-assert(combatStatusBox.SetTextArgs[1]:find("Breath/equipment state below is also cached, not live.", 1, true))
+assert(combatStatusBox.SetTextArgs[1]:find("Breath/equipment/enchant state below is also cached, not live.", 1, true))
 combat = false
 event("PLAYER_REGEN_ENABLED")
 assert(not hydrocane.shown, "post-combat refresh must re-read the breath timer")
@@ -383,6 +388,49 @@ combat = false
 event("PLAYER_REGEN_ENABLED")
 assert(not hydrocane.shown)
 level, mainHand, bags[0] = 22, nil, {}
+
+-- Fishing is informational, ownership-only, and any pole enchant suppresses it.
+mainHand, bags[0] = 6256, { 6532 }
+event("PLAYER_EQUIPMENT_CHANGED")
+local fishing
+for _, frame in ipairs(frames) do
+    if frame.icon and frame.icon.SetTextureArgs and frame.icon.SetTextureArgs[1] == 106532 then fishing = frame end
+end
+assert(fishing and fishing.shown and BuffedDB.enabled.fishing)
+assert(not fishing.type and not fishing.item and not fishing.spell)
+for _, id in ipairs({ 6529, 6530, 6532, 6533, 6811, 7307 }) do
+    bags[0] = { id }
+    event("BAG_UPDATE_DELAYED")
+    assert(fishing.shown)
+end
+for _, state in ipairs({ true, false }) do
+    enchanted = state
+    event("UNIT_INVENTORY_CHANGED", "player")
+    assert(fishing.shown == not state)
+end
+mainHand = 9452
+event("PLAYER_EQUIPMENT_CHANGED")
+assert(not fishing.shown)
+mainHand, bags[0] = 6256, {}
+event("BAG_UPDATE_DELAYED")
+assert(not fishing.shown)
+bags[0] = { 6532 }
+event("BAG_UPDATE_DELAYED")
+SlashCmdList.BUFFED("fishing")
+assert(not fishing.shown)
+SlashCmdList.BUFFED("fishing")
+assert(fishing.shown)
+combat = true
+event("PLAYER_REGEN_DISABLED")
+before, previousScans = mutations, scans
+event("UNIT_INVENTORY_CHANGED", "player")
+SlashCmdList.BUFFED("status")
+assert(scans == previousScans and mutations == before)
+combat = false
+event("PLAYER_REGEN_ENABLED")
+mainHand, bags[0] = nil, {}
+event("PLAYER_EQUIPMENT_CHANGED")
+assert(not fishing.shown)
 
 -- Sleeping bag ownership and any Well-Rested stack use the normal item path.
 assert(BuffedDB.enabled.sleepingbag)

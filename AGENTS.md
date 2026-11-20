@@ -312,6 +312,33 @@ data sources, and test procedures belong here or beside the relevant code.
   confirm both reminders hide/return while other reminders remain unchanged.
   Repeat a transition in combat and verify the result after combat ends.
 
+### Fishing lure reminder
+
+- Shared, informational-only `/buffed fishing`: exact main-hand item 6256,
+  carried allowlisted lure, and GetWeaponEnchantInfo's first return false.
+  No click action, skill check, automatic equipment swap, or combat reads.
+  Any temporary main-hand enchant suppresses it; no enchant-ID mapping inferred.
+- User verified out of combat: false/nil/nil/nil without a lure;
+  true/598657/0/265 after applying one. Only the boolean is used; missing API
+  or nil result fails closed. Combat status reports cached equipment/enchant state.
+- Verified individually at https://nether.wowhead.com/forever/tooltip/item/{ID}:
+  6256 Fishing Pole; 6529 Shiny Bauble (+25/10min), 6530 Nightcrawlers
+  (+50/10min), 6532 Bright Baubles (+75/10min), 6533 Aquadynamic Fish
+  Attractor (+100/5min), 6811 Aquadynamic Fish Lens (+50/10min),
+  7307 Flesh Eating Worm (+75/10min). No character-level requirements listed.
+  Fishing requirements: none listed/50/100/100/50/100 respectively for lures.
+  Linked spells 8087/8088/8090/8089/8532/9092 individually verified at
+  https://nether.wowhead.com/forever/tooltip/spell/{ID}; all five-second casts,
+  no aura mappings exposed. Ownership only, not a claim of usability or ranking.
+- Refresh uses existing events plus UNIT_INVENTORY_CHANGED. No polling added.
+  User reported the reminder works in-game after implementation; individual
+  expiry-without-movement and suppression cases were not separately reported.
+  For further validation: equip 6256 with a lure in bags, apply it, let it expire without moving,
+  swap to staff, remove lures, toggle /buffed fishing, and check suppression.
+  Report /buffed status if stale; do not assume expiry emits an event.
+- Mocks cover six lure IDs, ownership, exact pole, enchant applied/removed,
+  toggle, no click action, and combat inventory/status scan and mutation guards.
+
 ### Hydrocane reminder
 
 - Informational-only `hydrocane` reminder for all classes; no equip action,
