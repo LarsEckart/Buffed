@@ -16,6 +16,9 @@ Camp Benefits and Hydrocane are informational reminders only (not clickable).
 reminders when their prerequisites are met. Item reminders require a supported,
 usable item in your bags; Camp Benefits needs no item.
 
+**Skyborne** characters get **Skysight** when learned and off cooldown. Click for
+its 30-second speed boost; like other reminders, it stays hidden while mounted.
+
 **Druids** also get **Mark of the Wild** (Gift of the Wild counts), **Thorns**,
 and **Nature's Grasp**. Nature's Grasp appears only when learned, missing, and
 off cooldown; click to cast on yourself.
@@ -61,7 +64,7 @@ saved per character.
 | `/buffed unlock` | Drag the **Buffed** label to move the bar |
 | `/buffed lock` | Lock the bar |
 | `/buffed reset` | Reset its position |
-| `/buffed mark`, `thorns`, `grasp`, `fortitude`, `spirit`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, `hydrocane`, or `camp` | Toggle a reminder supported by your class |
+| `/buffed mark`, `thorns`, `grasp`, `skysight`, `fortitude`, `spirit`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, `hydrocane`, or `camp` | Toggle a reminder supported by your class |
 | `/buffed status` | Show diagnostics in chat and a copy window |
 
 If a reminder stays visible after buffing, run `/buffed status`, press **Ctrl+C**

@@ -389,6 +389,29 @@ data sources, and test procedures belong here or beside the relevant code.
   and icon disappearance. Check Gift, food from bags, toggles, combat/mount/death
   suppression. Share out-of-combat `/buffed status` if detection fails.
 
+### Skyborne Skysight reminder
+
+- `skysight` is a clickable, learned-spell and cooldown-ready reminder shared
+  across classes. Learned Skysight gates availability rather than introducing
+  an unverified race-token API. Existing combat/mount/death suppression applies;
+  the user explicitly requested no reminder while mounted.
+- Verified https://nether.wowhead.com/forever/tooltip/spell/1259686:
+  Skysight, icon ability_skyreach_lens_flare, level 1, 0.5-second cast,
+  two-minute cooldown, +15% movement and mounted movement speed for 30 seconds.
+  Tooltip says a nearby elemental convergence grants Charged for one hour and
+  increases the ability's effect by 100%; no convergence/Charged checks added.
+  The endpoint exposes no resulting aura ID; no aura mapping is inferred.
+- Reuses the verified out-of-combat C_Spell.GetSpellCooldown fields and secure
+  self-cast path. SPELL_UPDATE_COOLDOWN is now registered for all classes.
+  No combat reads or polling. Mock tests cover unlearned/learned, cooldown
+  expiry, missing/disabled data, self-target attributes, toggle, mount/death,
+  combat scan/mutation guards and class isolation.
+- Actual Forever racial spellbook/casting behavior and cooldown expiry event
+  delivery remain unverified. On a Skyborne character: /reload, check the ready
+  icon, click with another unit targeted, and confirm hiding after casting and
+  automatic return after two minutes without moving. Check /buffed skysight,
+  mount/dismount and combat transitions; share /buffed status if it fails.
+
 ### Druid Nature's Grasp reminder
 
 - Druid-only `grasp`: learned, missing aura, and off cooldown. Existing self-cast

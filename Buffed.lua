@@ -15,6 +15,11 @@ local buffs = {
     -- Each rank verified at the Forever spell endpoint; cooldown fields tested in-client.
     { key = "grasp", name = "Nature's Grasp", cooldown = true,
         auraIDs = { 16689, 16810, 16811, 16812, 16813, 17329 } },
+    -- https://nether.wowhead.com/forever/tooltip/spell/1259686
+    -- Racial availability is gated by the learned spell, not a race token.
+    -- No resulting aura ID is exposed; this reminder checks cooldown only.
+    { key = "skysight", name = "Skysight", cooldown = true, racial = true,
+        auraIDs = {}, icon = "Interface\\Icons\\ability_skyreach_lens_flare" },
     { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude",
         auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
     { key = "spirit", name = "Divine Spirit", alternate = "Prayer of Spirit",
@@ -39,14 +44,14 @@ local buffs = {
         auraIDs = { 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 } },
 }
 
--- Items and informational reminders are shared; spell reminders are class-specific.
+-- Items, informational reminders and learned racials are shared across classes.
 local spellClasses = {
     mark = "DRUID", thorns = "DRUID", grasp = "DRUID",
     fortitude = "PRIEST", spirit = "PRIEST", fire = "PRIEST", shadowguard = "PRIEST",
 }
 local classBuffs = {}
 for _, buff in ipairs(buffs) do
-    if buff.item or buff.reminderOnly or spellClasses[buff.key] == class then
+    if buff.item or buff.reminderOnly or buff.racial or spellClasses[buff.key] == class then
         classBuffs[#classBuffs + 1] = buff
     end
 end
@@ -368,6 +373,7 @@ local function Refresh()
         end
         local needed
         if buff.gear then needed = cachedHydrocaneNeeded
+        elseif buff.racial then needed = true -- cooldown-ready reminder, no aura mapping assumed
         else needed = not HasBuff(active, buff) end
         local ready = not buff.cooldown or CooldownReady(buff, available)
         local missing = BuffedDB.enabled[buff.key] and available and needed and ready
@@ -599,7 +605,7 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("UNIT_AURA")
 events:RegisterEvent("SPELLS_CHANGED")
-if class == "DRUID" then events:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
+events:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 events:RegisterEvent("BAG_UPDATE_DELAYED")
 events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("PLAYER_ALIVE")

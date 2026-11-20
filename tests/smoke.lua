@@ -101,7 +101,7 @@ C_Spell = {
     GetSpellInfo = function(name) return { iconID = 123, spellID = spellIDs[name] } end,
     GetSpellCooldown = function(name)
         recordScan()
-        assert(name == "Nature's Grasp")
+        assert(name == "Nature's Grasp" or name == "Skysight")
         return cooldownInfo
     end,
 }
@@ -775,7 +775,7 @@ for _, frame in ipairs(frames) do
         if frame.spell == "Mark of the Wild" then mark = frame
         elseif frame.spell == "Thorns" then thorns = frame
         elseif frame.spell == "Nature's Grasp" then grasp = frame
-        else error("druids must not get priest spells") end
+        elseif frame.spell ~= "Skysight" then error("druids must not get priest spells") end
     elseif frame.type == "item" then druidFood = druidFood or frame
     elseif frame.icon and frame.icon.SetTextureArgs
         and frame.icon.SetTextureArgs[1] == "Interface\\Icons\\inv_camelot_camping_campbenefits" then
@@ -783,7 +783,7 @@ for _, frame in ipairs(frames) do
     end
     if frame.type then secureButtons = secureButtons + 1 end
 end
-assert(secureButtons == 6 and mark and thorns and grasp and druidFood and druidCamp,
+assert(secureButtons == 7 and mark and thorns and grasp and druidFood and druidCamp,
     "druid scope includes Nature's Grasp and all shared reminders")
 assert(frames[1].events.SPELL_UPDATE_COOLDOWN)
 assert(not grasp.shown and BuffedDB.enabled.grasp)
@@ -926,7 +926,7 @@ for _, classToken in ipairs({ "PRIEST", "DRUID", "WARRIOR", "MAGE", "ROGUE",
             spellButtons[#spellButtons + 1] = frame
             local druidSpell = frame.spell == "Mark of the Wild" or frame.spell == "Thorns"
                 or frame.spell == "Nature's Grasp"
-            assert((classToken == "DRUID" and druidSpell)
+            assert(frame.spell == "Skysight" or (classToken == "DRUID" and druidSpell)
                 or (classToken == "PRIEST" and not druidSpell), "class spell leaked")
         elseif frame.icon and frame.icon.SetTextureArgs
             and frame.icon.SetTextureArgs[1] == "Interface\\Icons\\inv_camelot_camping_campbenefits" then
@@ -934,7 +934,7 @@ for _, classToken in ipairs({ "PRIEST", "DRUID", "WARRIOR", "MAGE", "ROGUE",
         end
     end
     assert(#itemButtons == 3 and sharedCamp and sharedCamp.shown)
-    assert(#spellButtons == (classToken == "PRIEST" and 4 or classToken == "DRUID" and 3 or 0))
+    assert(#spellButtons == (classToken == "PRIEST" and 5 or classToken == "DRUID" and 4 or 1))
     bags[0] = { 2681, 955, 211527 }
     event("BAG_UPDATE_DELAYED")
     local selected = {}
@@ -959,4 +959,58 @@ for _, classToken in ipairs({ "PRIEST", "DRUID", "WARRIOR", "MAGE", "ROGUE",
     SlashCmdList.BUFFED("intellect")
     assert(not BuffedDB.enabled.intellect)
 end
+-- Learned racial reminders are available independently of class/race tokens.
+spellIDs.Skysight = 1259686
+local skysight
+for _, frame in ipairs(frames) do
+    if frame.spell == "Skysight" then skysight = frame end
+end
+assert(skysight and not skysight.shown)
+assert(frames[1].events.SPELL_UPDATE_COOLDOWN)
+learned.Skysight = true
+cooldownInfo = { startTime = 0, duration = 0, isEnabled = true }
+event("SPELLS_CHANGED")
+assert(skysight.shown and skysight.type == "spell" and skysight.unit == "player")
+cooldownInfo = { startTime = now, duration = 120, isEnabled = true }
+event("SPELL_UPDATE_COOLDOWN")
+assert(not skysight.shown)
+now = now + 120
+event("SPELL_UPDATE_COOLDOWN")
+assert(skysight.shown, "Skysight must return when its cooldown expires")
+cooldownInfo = nil
+event("SPELL_UPDATE_COOLDOWN")
+assert(not skysight.shown)
+cooldownInfo = { startTime = 0, duration = 0, isEnabled = false }
+event("SPELL_UPDATE_COOLDOWN")
+assert(not skysight.shown)
+cooldownInfo.isEnabled = true
+event("SPELL_UPDATE_COOLDOWN")
+assert(skysight.shown)
+mounted = true
+event("PLAYER_MOUNT_DISPLAY_CHANGED")
+assert(not skysight.shown)
+mounted = false
+event("PLAYER_MOUNT_DISPLAY_CHANGED")
+assert(skysight.shown)
+dead = true
+event("PLAYER_DEAD")
+assert(not skysight.shown)
+dead = false
+event("PLAYER_ALIVE")
+assert(skysight.shown)
+combat = true
+event("PLAYER_REGEN_DISABLED")
+local racialScans, racialMutations = scans, mutations
+event("SPELL_UPDATE_COOLDOWN")
+SlashCmdList.BUFFED("status")
+assert(scans == racialScans and mutations == racialMutations)
+combat = false
+event("PLAYER_REGEN_ENABLED")
+SlashCmdList.BUFFED("skysight")
+assert(not skysight.shown and not BuffedDB.enabled.skysight)
+SlashCmdList.BUFFED("skysight")
+assert(skysight.shown)
+learned.Skysight = false
+event("SPELLS_CHANGED")
+assert(not skysight.shown)
 print("Buffed mock smoke tests passed")
