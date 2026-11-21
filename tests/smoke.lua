@@ -11,10 +11,12 @@ local function recordScan()
     assert(not combat and not dead and not mounted, "unnecessary or restricted scan while suppressed")
     scans = scans + 1
 end
-local mirrorTimers, mainHand = {}, nil
+local mirrorTimers, mainHand, offHand = {}, nil, nil
 local enchanted = false
+local enchants
 function GetWeaponEnchantInfo()
     recordScan()
+    if enchants then return (unpack or table.unpack)(enchants) end
     return enchanted, enchanted and 598657 or nil, enchanted and 0 or nil, enchanted and 265 or nil
 end
 function GetMirrorTimerInfo(index)
@@ -23,8 +25,9 @@ function GetMirrorTimerInfo(index)
 end
 function GetInventoryItemID(unit, slot)
     recordScan()
-    assert(unit == "player" and slot == 16)
-    return mainHand
+    assert(unit == "player" and (slot == 16 or slot == 17))
+    if slot == 16 then return mainHand end
+    return offHand
 end
 -- Conservative protection model: reject mutations through secure parents or
 -- relative anchors too.
@@ -1081,4 +1084,77 @@ assert(skysight.shown, "ready Skysight should return after combat")
 learned.Skysight = false
 event("SPELLS_CHANGED")
 assert(not skysight.shown)
+-- Rogue poison uses one secure macro, one hand per hardware click.
+frames, active, learned, bags = {}, {}, {}, { [0] = { 6947 } }
+BuffedDB = nil
+level, mainHand, offHand = 25, 100, 101
+function UnitClass() return "Rogue", "ROGUE" end
+loadAddon()
+event("PLAYER_ENTERING_WORLD")
+local poison
+for _, frame in ipairs(frames) do if frame.type == "macro" then poison = frame end end
+assert(poison and poison.shown and poison.macrotext == "/use item:6947\n/use 16")
+assert(frames[1].events.UNIT_INVENTORY_CHANGED)
+enchants = { true, 1000, 60, 323, false, 0, 0, 0 }
+event("UNIT_INVENTORY_CHANGED", "player")
+assert(poison.shown and poison.macrotext == "/use item:6947\n/use 17")
+enchants[5], enchants[8] = true, 323
+event("UNIT_INVENTORY_CHANGED", "player")
+assert(not poison.shown and poison.macrotext == nil)
+enchants[5], enchants[8] = false, 0
+offHand = nil
+event("PLAYER_EQUIPMENT_CHANGED", 17)
+assert(not poison.shown)
+offHand = 101
+enchants[5], enchants[8] = true, 99999
+event("UNIT_INVENTORY_CHANGED", "player")
+assert(not poison.shown, "unknown enchants must not be overwritten")
+enchants[5] = false
+event("UNIT_INVENTORY_CHANGED", "player")
+assert(poison.shown)
+level = 19
+event("PLAYER_LEVEL_UP")
+assert(not poison.shown and poison.macrotext == nil)
+level, bags = 25, {}
+event("BAG_UPDATE_DELAYED")
+assert(not poison.shown)
+bags = { [0] = { 6947 } }
+event("BAG_UPDATE_DELAYED")
+assert(poison.shown)
+mounted = true
+event("PLAYER_MOUNT_DISPLAY_CHANGED")
+assert(not poison.shown)
+mounted = false
+event("PLAYER_MOUNT_DISPLAY_CHANGED")
+dead = true
+event("PLAYER_DEAD")
+assert(not poison.shown)
+dead = false
+event("PLAYER_ALIVE")
+combat = true
+event("PLAYER_REGEN_DISABLED")
+local poisonScans, poisonMutations = scans, mutations
+event("UNIT_INVENTORY_CHANGED", "player")
+SlashCmdList.BUFFED("status")
+assert(scans == poisonScans and mutations == poisonMutations)
+combat = false
+event("PLAYER_REGEN_ENABLED")
+assert(poison.shown)
+for _, entry in ipairs({ {6947,20}, {6949,28}, {6950,36}, {8926,44},
+    {8927,52}, {8928,60}, {2892,30}, {2893,38}, {8984,46}, {8985,54},
+    {20844,60}, {3775,20}, {3776,50}, {5237,24}, {6951,38}, {9186,52},
+    {10918,32}, {10920,40}, {10921,48}, {10922,56} }) do
+    bags, level = { [0] = { entry[1] } }, entry[2]
+    event("BAG_UPDATE_DELAYED")
+    assert(poison.shown and poison.macrotext == "/use item:" .. entry[1] .. "\n/use 17")
+    level = entry[2] - 1
+    event("PLAYER_LEVEL_UP")
+    assert(not poison.shown and poison.macrotext == nil)
+end
+bags, level = { [0] = { 6947, 6949, 2892 } }, 30
+event("BAG_UPDATE_DELAYED")
+assert(poison.macrotext == "/use item:2892\n/use 17")
+level = 29
+event("PLAYER_LEVEL_UP")
+assert(poison.macrotext == "/use item:6949\n/use 17")
 print("Buffed mock smoke tests passed")

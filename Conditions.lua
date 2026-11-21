@@ -11,6 +11,31 @@ function addon.FishingNeeded()
     return not enchanted
 end
 
+-- Any existing temporary enchant is left untouched, regardless of its ID.
+function addon.PoisonNeeded()
+    if not GetWeaponEnchantInfo or not GetInventoryItemID then
+        return nil, "weapon enchant API unavailable"
+    end
+    local mh, _, _, mid, oh, _, _, oid = GetWeaponEnchantInfo()
+    local needed, states = nil, {}
+    for _, hand in ipairs({ {16, mh, mid}, {17, oh, oid} }) do
+        local slot, enchanted, id = hand[1], hand[2], hand[3]
+        local state
+        if not GetInventoryItemID("player", slot) then
+            state = "empty"
+        elseif enchanted == false then
+            needed = needed or slot
+            state = "missing"
+        elseif enchanted == true then
+            state = "enchanted" .. (id and " (ID " .. id .. ")" or "")
+        else
+            state = "enchant state unknown"
+        end
+        states[#states + 1] = slot .. " " .. state
+    end
+    return needed, table.concat(states, "; ")
+end
+
 function addon.HydrocaneNeeded()
     -- User verified BREATH while underwater, UNKNOWN after the bar disappears.
     -- IsSubmerged/IsSwimming both stayed true at the surface in this client.

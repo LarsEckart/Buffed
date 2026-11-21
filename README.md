@@ -19,6 +19,12 @@ usable item in your bags; Camp Benefits needs no item.
 **Skyborne** characters get **Skysight** when learned and off cooldown. Click for
 its 30-second speed boost; like other reminders, it stays hidden while mounted.
 
+**Rogues** get one **Weapon Poison** icon when carrying a supported usable poison
+and an equipped hand has no temporary enchant. Click to apply poison directly to
+that hand (main hand first). If both need poison, wait for the first application,
+then click again. Selects the highest-level usable carried poison, not a build-specific
+poison type. Any existing temporary enchant, including a stone, hides the reminder for that hand.
+
 **Druids** also get **Mark of the Wild** (Gift of the Wild counts), **Thorns**,
 and **Nature's Grasp**. Nature's Grasp appears only when learned, missing, and
 off cooldown; click to cast on yourself.

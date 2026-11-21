@@ -16,6 +16,30 @@ addon.consumables = {
         { id = 6811, level = 1, name = "Aquadynamic Fish Lens" },
         { id = 7307, level = 1, name = "Flesh Eating Worm" },
     },
+    -- Each item individually verified: https://nether.wowhead.com/forever/tooltip/item/{id}
+    -- Highest usable required level wins; list order breaks ties.
+    poison = {
+        { id = 6947, level = 20, name = "Instant Poison" },
+        { id = 6949, level = 28, name = "Instant Poison II" },
+        { id = 6950, level = 36, name = "Instant Poison III" },
+        { id = 8926, level = 44, name = "Instant Poison IV" },
+        { id = 8927, level = 52, name = "Instant Poison V" },
+        { id = 8928, level = 60, name = "Instant Poison VI" },
+        { id = 2892, level = 30, name = "Deadly Poison" },
+        { id = 2893, level = 38, name = "Deadly Poison II" },
+        { id = 8984, level = 46, name = "Deadly Poison III" },
+        { id = 8985, level = 54, name = "Deadly Poison IV" },
+        { id = 20844, level = 60, name = "Deadly Poison V" },
+        { id = 3775, level = 20, name = "Crippling Poison" },
+        { id = 3776, level = 50, name = "Crippling Poison II" },
+        { id = 5237, level = 24, name = "Mind-numbing Poison" },
+        { id = 6951, level = 38, name = "Mind-numbing Poison II" },
+        { id = 9186, level = 52, name = "Mind-numbing Poison III" },
+        { id = 10918, level = 32, name = "Wound Poison" },
+        { id = 10920, level = 40, name = "Wound Poison II" },
+        { id = 10921, level = 48, name = "Wound Poison III" },
+        { id = 10922, level = 56, name = "Wound Poison IV" },
+    },
     -- Required character level, not the linked effect's spell level.
     -- https://nether.wowhead.com/forever/tooltip/item/9452
     hydrocane = { { id = 9452, level = 27, name = "Hydrocane" } },

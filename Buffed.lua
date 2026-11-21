@@ -173,7 +173,13 @@ local function CooldownReady(buff, available)
     return cachedCooldownReady[buff.key]
 end
 
+local poisonSlot, poisonState
+local function RefreshPoison()
+    if class == "ROGUE" then poisonSlot, poisonState = addon.PoisonNeeded() end
+end
+
 local function HasBuff(active, buff)
+    if buff.poison then return poisonSlot == nil end
     for _, id in ipairs(buff.auraIDs) do
         if active[id] then return true end
     end
@@ -207,6 +213,7 @@ local function Refresh()
     local active, _, wellRestedExpiration = ActiveBuffs()
     cachedHydrocaneNeeded = HydrocaneNeeded()
     cachedFishingNeeded = FishingNeeded()
+    RefreshPoison()
     -- User verified IsInInstance() returns true, "party" inside a Forever dungeon.
     local inInstance, instanceType = IsInInstance()
     local inDungeon = inInstance and instanceType == "party"
@@ -219,7 +226,11 @@ local function Refresh()
         elseif buff.reminderOnly then available = true
         else available = not not Known(buff.name) end
         availability[buff.key] = available
-        if buff.item then
+        if buff.poison then
+            button:SetAttribute("macrotext", item and poisonSlot
+                and ("/use item:" .. item.id .. "\n/use " .. poisonSlot) or nil)
+            button.displayName = item and poisonSlot and (item.name .. " (" .. (poisonSlot == 17 and "off hand" or "main hand") .. ")") or buff.name
+        elseif buff.item then
             button:SetAttribute("item", item and ("item:" .. item.id) or nil)
             button.displayName = item and item.name or buff.name
         end
@@ -291,6 +302,8 @@ local function Initialize()
         button:RegisterForClicks("AnyUp", "AnyDown")
         if buff.reminderOnly then
             -- No secure action: this is an informational reminder, not a cast.
+        elseif buff.poison then
+            button:SetAttribute("type", "macro")
         elseif buff.item then
             button:SetAttribute("type", "item")
             button:SetAttribute("unit", "player")
@@ -313,6 +326,8 @@ local function Initialize()
                 GameTooltip:AddLine("Breath timer active. Equip Hydrocane for 50% longer underwater breath. This icon is not clickable.", 1, 1, 1)
             elseif buff.reminderOnly then
                 GameTooltip:AddLine("Camp Benefits missing. Visit a camp to refresh it. This icon is not clickable.", 1, 1, 1)
+            elseif buff.poison then
+                GameTooltip:AddLine("Click to poison the missing hand. If both are missing, click again after application. Existing temporary enchants are left unchanged.", 1, 1, 1)
             elseif buff.key == "food" then
                 GameTooltip:AddLine("Click to eat. Remain seated for at least 10 seconds for +5% kill XP.", 1, 1, 1)
             elseif buff.key == "sleepingbag" then
@@ -402,6 +417,10 @@ local function HandleCommand(message)
         if not CombatLocked() then
             cachedHydrocaneNeeded = HydrocaneNeeded()
             cachedFishingNeeded = FishingNeeded()
+            RefreshPoison()
+        end
+        if class == "ROGUE" then
+            AddLine("Weapon enchants" .. (CombatLocked() and " (cached, not live)" or "") .. ": " .. (poisonState or "unknown"))
         end
         for _, buff in ipairs(buffs) do
             local available = availability[buff.key]
@@ -496,8 +515,9 @@ local function HandleEvent(_, event, unit)
         if CombatLocked() then return end
         if unit ~= "player" then return end
     end
-    if (event == "MIRROR_TIMER_START" or event == "MIRROR_TIMER_STOP") and not CombatLocked() then
-        -- Timer events can precede GetMirrorTimerInfo's updated state. Recheck
+    if (event == "MIRROR_TIMER_START" or event == "MIRROR_TIMER_STOP"
+        or (event == "UNIT_INVENTORY_CHANGED" and unit == "player")) and not CombatLocked() then
+        -- Timer and inventory events can precede the updated API state. Recheck
         -- once next frame, then remove the handler (no continuous polling).
         events:SetScript("OnUpdate", function(self)
             self:SetScript("OnUpdate", nil)
