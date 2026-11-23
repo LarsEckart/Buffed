@@ -70,8 +70,9 @@ saved per character.
 | `/buffed unlock` | Drag the **Buffed** label to move the bar |
 | `/buffed lock` | Lock the bar |
 | `/buffed reset` | Reset its position |
-| `/buffed mark`, `thorns`, `grasp`, `skysight`, `fortitude`, `spirit`, `fire`, `shadowguard`, `food`, `intellect`, `sleepingbag`, `hydrocane`, `fishing`, or `camp` | Toggle a reminder supported by your class |
 | `/buffed status` | Show diagnostics in chat and a copy window |
+
+Reminders appear automatically when their conditions are met. Old per-reminder toggles are no longer used.
 
 If a reminder stays visible after buffing, run `/buffed status`, press **Ctrl+C**
 to copy the selected text, and share it with your report. Press **Escape** to close the window.

@@ -124,7 +124,29 @@ C_UnitAuras = { GetBuffDataByIndex = function(_, index)
     return type(aura) == "table" and aura or (aura and { name = aura })
 end }
 
-assert(loadfile("Buffed.lua"))("Buffed")
+local runtimeFiles = {}
+if io.lines then
+    for line in io.lines("Buffed.toc") do
+        local path = line:match("^%s*(.-)%s*$")
+        if path ~= "" and path:sub(1, 1) ~= "#" then
+            runtimeFiles[#runtimeFiles + 1] = path
+        end
+    end
+else
+    -- Fengari lacks file IO; pass the TOC's file entries as arguments.
+    runtimeFiles = arg
+end
+assert(#runtimeFiles > 0, "Expected runtime filenames from Buffed.toc")
+
+local function loadAddon()
+    -- WoW passes the same private table to every file in TOC order.
+    local addon = {}
+    for _, path in ipairs(runtimeFiles) do
+        assert(loadfile(path))("Buffed", addon)
+    end
+end
+
+loadAddon()
 local function event(name, unit) frames[1].OnEvent(frames[1], name, unit) end
 learned["Power Word: Fortitude"], learned["Inner Fire"] = true, true
 assert(not frames[1].events.PLAYER_LOGIN, "login event should not be registered")
@@ -133,12 +155,19 @@ for _, name in ipairs({ "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "UNIT_AURA", "PL
 end
 assert(#frames == 1 and mutations == 0 and scans == 0 and BuffedDB == nil,
     "events before world entry must not initialize or scan")
+BuffedDB = {
+    enabled = { fortitude = false, food = false },
+    position = { point = "CENTER", relativePoint = "CENTER", x = 32, y = -56 },
+    unlocked = false,
+}
 combat = true
 event("PLAYER_ENTERING_WORLD")
 assert(#frames == 1 and scans == 0, "world entry in combat must defer initialization")
 combat = false
 event("PLAYER_REGEN_ENABLED")
 assert(scans > 0, "deferred initialization should run after combat")
+assert(BuffedDB.enabled == nil and BuffedDB.unlocked == false, "retire only the legacy toggle settings")
+assert(BuffedAnchor.point[4] == 32 and BuffedAnchor.point[5] == -56, "preserve the saved bar position")
 assert(not BuffedCombatShadowguard, "do not create a combat reminder dependent on secret auras")
 BuffedAnchor:SetPoint("CENTER", UIParent, "CENTER", 80, -90)
 BuffedAnchor.OnDragStop(BuffedAnchor)
@@ -170,7 +199,6 @@ learned["Divine Spirit"] = true
 event("SPELLS_CHANGED")
 assert(spirit.shown and spirit.unit == "player" and spirit.type == "spell",
     "learning Divine Spirit should enable a self-cast reminder")
-assert(BuffedDB.enabled.spirit, "Divine Spirit should default on")
 for _, name in ipairs({ "Divine Spirit", "Prayer of Spirit" }) do
     active = { name }
     event("UNIT_AURA", "player")
@@ -180,13 +208,13 @@ active = { { name = "Divine Spirit", spellId = 1 } }
 event("UNIT_AURA", "player")
 assert(spirit.shown, "an unknown Spirit ID must not match by name")
 SlashCmdList.BUFFED("spirit")
-assert(not spirit.shown and not BuffedDB.enabled.spirit)
-SlashCmdList.BUFFED("spirit")
-assert(spirit.shown and BuffedDB.enabled.spirit)
+assert(messages[#messages]:find("Unknown command", 1, true) and spirit.shown,
+    "removed toggle must not change reminder visibility")
+SlashCmdList.BUFFED("help")
+assert(messages[#messages]:find("unlock | lock | reset | status", 1, true))
 for _, command in ipairs({ "shadow", "form" }) do
     SlashCmdList.BUFFED(command)
     assert(messages[#messages]:find("Unknown command", 1, true), "removed reminder must not be configurable")
-    assert(BuffedDB.enabled[command] == nil)
 end
 active = { "Prayer of Fortitude", "Inner Fire" }
 event("UNIT_AURA", "player")
@@ -219,8 +247,8 @@ assert(fortitude.shown)
 combat = true
 local before = mutations
 event("UNIT_AURA", "player")
-SlashCmdList.BUFFED("fire")
-assert(mutations == before and BuffedDB.enabled.fire, "combat must not mutate settings or buttons")
+SlashCmdList.BUFFED("unlock")
+assert(mutations == before and not BuffedDB.unlocked, "combat must not mutate settings or buttons")
 combat = false
 event("PLAYER_REGEN_ENABLED")
 mounted = true
@@ -238,11 +266,9 @@ assert(scans == previousScans, "dead events should skip data scans")
 dead = false
 event("PLAYER_UNGHOST")
 assert(fortitude.shown)
-SlashCmdList.BUFFED("fire")
-assert(not fire.shown and not BuffedDB.enabled.fire)
 learned["Shadowguard"] = true
 event("SPELLS_CHANGED")
-assert(guard.shown and guard.unit == "player" and BuffedDB.enabled.shadowguard)
+assert(guard.shown and guard.unit == "player")
 active = { "Shadowguard" }
 event("UNIT_AURA", "player")
 assert(not guard.shown)
@@ -268,7 +294,7 @@ assert(combatStatusPanel.shown and combatStatusBox.SetFocusArgs)
 assert(combatStatusBox.SetTextArgs[1]:find("Combat: true", 1, true))
 assert(combatStatusBox.SetTextArgs[1]:find("cached, not live", 1, true))
 assert(combatStatusBox.SetTextArgs[1]:find("Cached player buffs", 1, true))
-assert(combatStatusBox.SetTextArgs[1]:find("Shadowguard: on, learned, active", 1, true),
+assert(combatStatusBox.SetTextArgs[1]:find("Shadowguard: learned, active", 1, true),
     "combat status must preserve pre-combat auras, not infer current state")
 combatStatusBox.OnEscapePressed()
 assert(not combatStatusPanel.shown)
@@ -280,17 +306,17 @@ combat = false
 event("PLAYER_REGEN_ENABLED")
 assert(guard.shown, "normal clickable reminder resumes with fresh auras after combat")
 SlashCmdList.BUFFED("status")
-assert(combatStatusBox.SetTextArgs[1]:find("Shadowguard: on, learned, missing", 1, true))
+assert(combatStatusBox.SetTextArgs[1]:find("Shadowguard: learned, missing", 1, true))
 assert(not combatStatusBox.SetTextArgs[1]:find("cached, not live", 1, true))
 combatStatusBox.OnEscapePressed()
 active = {}
 event("UNIT_AURA", "player")
 assert(guard.shown, "depleted Shadowguard should reappear")
-SlashCmdList.BUFFED("shadowguard")
+learned.Shadowguard = nil
+event("SPELLS_CHANGED")
 assert(not guard.shown)
 
 -- Hydrocane is an informational bag/equipment/breath-timer reminder, not an aura.
-assert(BuffedDB.enabled.hydrocane)
 assert(frames[1].events.MIRROR_TIMER_START and frames[1].events.MIRROR_TIMER_STOP
     and frames[1].events.PLAYER_EQUIPMENT_CHANGED)
 level, bags[0], mirrorTimers[2] = 27, { 9452 }, "BREATH"
@@ -324,10 +350,7 @@ event("MIRROR_TIMER_STOP", "BREATH")
 assert(not hydrocane.shown, "surface/other timers must not trigger Hydrocane")
 mirrorTimers[2] = "BREATH"
 event("MIRROR_TIMER_START", "BREATH")
-SlashCmdList.BUFFED("hydrocane")
-assert(not hydrocane.shown and not BuffedDB.enabled.hydrocane)
-SlashCmdList.BUFFED("hydrocane")
-assert(hydrocane.shown)
+assert(hydrocane.shown, "the active breath timer should restore the reminder")
 bags[0] = {}
 event("BAG_UPDATE_DELAYED")
 assert(not hydrocane.shown, "no carried Hydrocane means no reminder")
@@ -396,7 +419,7 @@ local fishing
 for _, frame in ipairs(frames) do
     if frame.icon and frame.icon.SetTextureArgs and frame.icon.SetTextureArgs[1] == 106532 then fishing = frame end
 end
-assert(fishing and fishing.shown and BuffedDB.enabled.fishing)
+assert(fishing and fishing.shown)
 assert(not fishing.type and not fishing.item and not fishing.spell)
 for _, id in ipairs({ 6529, 6530, 6532, 6533, 6811, 7307 }) do
     bags[0] = { id }
@@ -422,10 +445,6 @@ enchanted = false
 bags[0] = { 6532 }
 event("BAG_UPDATE_DELAYED")
 assert(fishing.shown and not fishing.noLure and fishing.icon.SetTextureArgs[1] == 106532)
-SlashCmdList.BUFFED("fishing")
-assert(not fishing.shown)
-SlashCmdList.BUFFED("fishing")
-assert(fishing.shown)
 combat = true
 event("PLAYER_REGEN_DISABLED")
 before, previousScans = mutations, scans
@@ -439,7 +458,6 @@ event("PLAYER_EQUIPMENT_CHANGED")
 assert(not fishing.shown)
 
 -- Sleeping bag ownership and any Well-Rested stack use the normal item path.
-assert(BuffedDB.enabled.sleepingbag)
 bags[0] = { 211527 }
 event("BAG_UPDATE_DELAYED")
 local sleepingbag
@@ -462,10 +480,6 @@ assert(not sleepingbag.shown, "name fallback applies only without an ID")
 active = {}
 event("UNIT_AURA", "player")
 assert(sleepingbag.shown)
-SlashCmdList.BUFFED("sleepingbag")
-assert(not sleepingbag.shown and not BuffedDB.enabled.sleepingbag)
-SlashCmdList.BUFFED("sleepingbag")
-assert(sleepingbag.shown)
 combat = true
 before = mutations
 active = { { name = "Well-Rested", spellId = 429959 } }
@@ -486,7 +500,7 @@ for _, frame in ipairs(frames) do
         camp = frame
     end
 end
-assert(camp and camp.shown and BuffedDB.enabled.camp)
+assert(camp and camp.shown)
 assert(camp.type == nil and camp.spell == nil and camp.item == nil)
 active = { { name = "Camp Benefits", spellId = 1229741 } }
 event("UNIT_AURA", "player")
@@ -500,12 +514,8 @@ assert(not camp.shown)
 active = {}
 event("UNIT_AURA", "player")
 assert(camp.shown)
-SlashCmdList.BUFFED("camp")
-assert(not camp.shown and not BuffedDB.enabled.camp)
-SlashCmdList.BUFFED("camp")
-assert(camp.shown)
 SlashCmdList.BUFFED("status")
-assert(combatStatusBox.SetTextArgs[1]:find("Camp Benefits: on, reminder only, missing", 1, true))
+assert(combatStatusBox.SetTextArgs[1]:find("Camp Benefits: reminder only, missing", 1, true))
 combatStatusBox.OnEscapePressed()
 
 -- World entry updates dungeon suppression; other reminders remain available.
@@ -541,7 +551,7 @@ assert(camp.shown and sleepingbag.shown)
 bags[0] = {}
 event("BAG_UPDATE_DELAYED")
 
-assert(BuffedDB.enabled.food and not food.shown)
+assert(not food.shown)
 bags[0] = { 2681 }
 event("BAG_UPDATE_DELAYED")
 assert(food.shown and food.item == "item:2681" and food.type == "item" and food.unit == "player")
@@ -612,10 +622,6 @@ active = { "Food" }
 event("UNIT_AURA", "player")
 assert(food.shown, "eating without the XP buff does not satisfy the reminder")
 active = {}
-SlashCmdList.BUFFED("food")
-assert(not food.shown)
-SlashCmdList.BUFFED("food")
-assert(food.shown)
 combat = true
 bags[0] = {}
 before = mutations
@@ -714,9 +720,6 @@ for _, rank in ipairs({ { id = 955, level = 5 }, { id = 2290, level = 20 },
     event("PLAYER_LEVEL_UP")
     assert(intellect.shown and intellect.item == "item:" .. rank.id)
 end
-SlashCmdList.BUFFED("intellect")
-assert(not intellect.shown)
-SlashCmdList.BUFFED("intellect")
 GetContainerNumSlots = C_Container.GetContainerNumSlots
 GetContainerItemID = C_Container.GetContainerItemID
 C_Container = nil
@@ -734,7 +737,6 @@ GetSpellBookItemName = function(slot, book)
     return "Power Word: Fortitude", "Rank 2"
 end
 learned["Power Word: Fortitude"] = false
-BuffedDB.enabled.shadowguard = true
 event("SPELLS_CHANGED")
 assert(fortitude.shown and not guard.shown, "legacy book scan must recognize only learned names")
 GetNumSpellTabs, GetSpellTabInfo, GetSpellBookItemName = nil, nil, nil
@@ -799,7 +801,7 @@ assert(statusBox.SetTextArgs[1]:find("simulated status display failure", 1, true
 -- manufacture 'missing' or 'unlearned' results from an absent snapshot.
 local newEventsIndex = #frames + 1
 mounted = true
-assert(loadfile("Buffed.lua"))("Buffed")
+loadAddon()
 local newEvents = frames[newEventsIndex]
 newEvents.OnEvent(newEvents, "PLAYER_ENTERING_WORLD")
 mounted, combat = false, true
@@ -820,7 +822,7 @@ function UnitClass() return "Druid", "DRUID" end
 spellIDs["Mark of the Wild"] = 1126
 spellIDs.Thorns = 467
 spellIDs["Nature's Grasp"] = 16689
-assert(loadfile("Buffed.lua"))("Buffed")
+loadAddon()
 event("PLAYER_ENTERING_WORLD")
 local mark, thorns, grasp, druidFood, druidCamp
 local secureButtons = 0
@@ -840,7 +842,7 @@ end
 assert(secureButtons == 7 and mark and thorns and grasp and druidFood and druidCamp,
     "druid scope includes Nature's Grasp and all shared reminders")
 assert(frames[1].events.SPELL_UPDATE_COOLDOWN)
-assert(not grasp.shown and BuffedDB.enabled.grasp)
+assert(not grasp.shown)
 learned["Nature's Grasp"] = true
 event("SPELLS_CHANGED")
 assert(grasp.shown and grasp.unit == "player" and grasp.type == "spell")
@@ -869,11 +871,7 @@ active = { { name = "Nature's Grasp", spellId = 999999 } }
 event("UNIT_AURA", "player")
 assert(grasp.shown)
 active = {}
-SlashCmdList.BUFFED("grasp")
-assert(not grasp.shown and not BuffedDB.enabled.grasp)
-SlashCmdList.BUFFED("grasp")
-assert(grasp.shown)
-assert(druidCamp.shown and BuffedDB.enabled.camp)
+assert(druidCamp.shown)
 assert(druidCamp.type == nil and druidCamp.spell == nil and druidCamp.item == nil)
 active = { { name = "Camp Benefits", spellId = 1229741 } }
 event("UNIT_AURA", "player")
@@ -881,10 +879,6 @@ assert(not druidCamp.shown)
 active = {}
 event("UNIT_AURA", "player")
 assert(druidCamp.shown)
-SlashCmdList.BUFFED("camp")
-assert(not druidCamp.shown and not BuffedDB.enabled.camp)
-SlashCmdList.BUFFED("camp")
-assert(druidCamp.shown and BuffedDB.enabled.camp)
 inInstance, instanceType = true, "party"
 event("PLAYER_ENTERING_WORLD")
 assert(not druidCamp.shown, "druid camp reminder must hide in dungeons")
@@ -894,7 +888,7 @@ assert(druidCamp.shown)
 assert(not thorns.shown, "unlearned Thorns must hide")
 learned.Thorns = true
 event("SPELLS_CHANGED")
-assert(thorns.shown and thorns.unit == "player" and thorns.type == "spell" and BuffedDB.enabled.thorns)
+assert(thorns.shown and thorns.unit == "player" and thorns.type == "spell")
 for _, id in ipairs({ 467, 782, 1075, 8914, 9756, 9910 }) do
     active = { { name = "client aura", spellId = id } }
     event("UNIT_AURA", "player")
@@ -906,15 +900,11 @@ assert(not thorns.shown, "Thorns name fallback must count")
 active = { { name = "Thorns", spellId = 999999 } }
 event("UNIT_AURA", "player")
 assert(thorns.shown, "unknown Thorns IDs must not match by name")
-SlashCmdList.BUFFED("thorns")
-assert(not thorns.shown and not BuffedDB.enabled.thorns)
-SlashCmdList.BUFFED("thorns")
-assert(thorns.shown and BuffedDB.enabled.thorns)
 active = {}
 assert(not mark.shown and not druidFood.shown, "unlearned Mark and absent food should hide")
 learned["Mark of the Wild"] = true
 event("SPELLS_CHANGED")
-assert(mark.shown and mark.unit == "player" and BuffedDB.enabled.mark)
+assert(mark.shown and mark.unit == "player")
 for _, id in ipairs({ 1126, 5232, 6756, 5234, 8907, 9884, 9885, 21849, 21850 }) do
     active = { { name = "client aura", spellId = id } }
     event("UNIT_AURA", "player")
@@ -928,10 +918,6 @@ end
 active = { { name = "Mark of the Wild", spellId = 999999 } }
 event("UNIT_AURA", "player")
 assert(mark.shown, "unknown Mark IDs must not match by name")
-SlashCmdList.BUFFED("mark")
-assert(not mark.shown and not BuffedDB.enabled.mark)
-SlashCmdList.BUFFED("mark")
-assert(mark.shown)
 bags[0] = { 2681 }
 event("BAG_UPDATE_DELAYED")
 assert(druidFood.shown and druidFood.item == "item:2681" and druidFood.unit == "player")
@@ -969,7 +955,7 @@ for _, classToken in ipairs({ "PRIEST", "DRUID", "WARRIOR", "MAGE", "ROGUE",
     BuffedDB = nil
     level = 60
     function UnitClass() return classToken, classToken end
-    assert(loadfile("Buffed.lua"))("Buffed")
+    loadAddon()
     event("PLAYER_ENTERING_WORLD")
     local itemButtons, spellButtons, sharedCamp = {}, {}, nil
     for _, frame in ipairs(frames) do
@@ -1008,10 +994,6 @@ for _, classToken in ipairs({ "PRIEST", "DRUID", "WARRIOR", "MAGE", "ROGUE",
     event("BAG_UPDATE_DELAYED")
     for _, button in ipairs(itemButtons) do assert(not button.shown) end
     assert(sharedCamp.shown)
-    SlashCmdList.BUFFED("sleepingbag")
-    assert(not BuffedDB.enabled.sleepingbag)
-    SlashCmdList.BUFFED("intellect")
-    assert(not BuffedDB.enabled.intellect)
 end
 -- Learned racial reminders are available independently of class/race tokens.
 spellIDs.Skysight = 1259686
@@ -1060,10 +1042,7 @@ SlashCmdList.BUFFED("status")
 assert(scans == racialScans and mutations == racialMutations)
 combat = false
 event("PLAYER_REGEN_ENABLED")
-SlashCmdList.BUFFED("skysight")
-assert(not skysight.shown and not BuffedDB.enabled.skysight)
-SlashCmdList.BUFFED("skysight")
-assert(skysight.shown)
+assert(skysight.shown, "ready Skysight should return after combat")
 learned.Skysight = false
 event("SPELLS_CHANGED")
 assert(not skysight.shown)

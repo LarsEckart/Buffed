@@ -247,7 +247,7 @@ data sources, and test procedures belong here or beside the relevant code.
   Mock tests cover the entry event while lockdown still returns false; actual
   event/flag timing remains unverified. In-game, enter combat and move/use
   status, then leave combat: no aura error should occur and reminders refresh.
-- The verified food allowlist is `consumables.food` in `Buffed.lua`; it is not
+- The verified food allowlist is `addon.consumables.food` in `Items.lua`; it is not
   exhaustive. Selection prefers the highest usable required character level,
   breaking equal-level ties by allowlist order, without ranking stat bonuses.
 - Scroll of Intellect supports ranks I–IV (required levels 5/20/35/50), selecting
@@ -277,20 +277,16 @@ data sources, and test procedures belong here or beside the relevant code.
 - Only spell reminders are class-filtered: priests get `fortitude`, `spirit`,
   `fire`, `shadowguard`; druids get `mark`, `thorns`. This supersedes older
   priest/druid-only scope notes below. No new gameplay data or spell support added.
-- Mock coverage checks all shared reminders with and without carried items and
-  qualifying auras across nine class tokens, spell isolation, and shared toggles.
-  Actual Forever validation pending: on a druid and another class, `/reload`,
-  carry usable food/Intellect scroll/bag, check missing/present buffs and toggles,
-  and confirm normal combat/mount/death and dungeon suppression.
+- Mock coverage checks carried items, qualifying auras, and spell isolation
+  across nine class tokens. In Forever, carry usable XP food, an Intellect
+  scroll, and a bag on a druid and another class; check missing/present buffs
+  and normal combat/mount/death and dungeon suppression.
 
 ### Camp Benefits reminder
 
-- Available to priests and druids. Druid mock coverage includes default enablement,
-  informational-only attributes, aura detection, toggle, and dungeon suppression.
-  In-game druid validation pending: `/reload`, check missing/present Camp Benefits,
-  `/buffed camp`, and dungeon entry/exit.
-
-- `/buffed camp` toggles an informational-only reminder for the umbrella aura
+- Available to all classes. Mock coverage includes informational-only
+  attributes, aura detection, and dungeon suppression.
+- Informational-only reminder for the umbrella aura
   Camp Benefits (1229741), observed in the user's out-of-combat status report.
   It does not depend on carried items or learned spells and has no secure action.
 - Verified name, icon, one-hour buff duration and bundled benefit descriptions:
@@ -299,7 +295,7 @@ data sources, and test procedures belong here or beside the relevant code.
   inferred from the umbrella aura. No individual-benefit checks are implemented.
 - Uses the existing out-of-combat aura scan and combat-hidden parent. In-game:
   `/reload`, check that the icon hides with Camp Benefits and returns without it;
-  clicking must do nothing. Verify `/buffed camp` and combat/mount/death hiding.
+  clicking must do nothing. Verify combat/mount/death hiding and dungeon entry/exit.
 
 ### Dungeon suppression
 
@@ -314,7 +310,7 @@ data sources, and test procedures belong here or beside the relevant code.
 
 ### Fishing lure reminder
 
-- Shared, informational-only `/buffed fishing`: exact main-hand item 6256
+- Shared, informational-only `fishing` reminder: exact main-hand item 6256
   and GetWeaponEnchantInfo's first return false. Carried lures are optional:
   show the selected lure icon if carried, otherwise item 6256's fishing-pole
   icon (verified icon inv_fishingpole_02). Tooltip distinguishes both cases.
@@ -336,11 +332,11 @@ data sources, and test procedures belong here or beside the relevant code.
   User reported the reminder works in-game after implementation; individual
   expiry-without-movement and suppression cases were not separately reported.
   For further validation: equip 6256 with a lure in bags, apply it, let it expire without moving,
-  swap to staff, remove lures, toggle /buffed fishing, and check suppression.
+  swap to staff, remove lures, and check suppression.
   Report /buffed status if stale; do not assume expiry emits an event.
 - Mocks cover six lure IDs, optional ownership and pole-icon fallback, exact
   pole, enchant applied/removed with and without carried lures,
-  toggle, no click action, and combat inventory/status scan and mutation guards.
+  no click action, and combat inventory/status scan and mutation guards.
 
 ### Hydrocane reminder
 
@@ -371,11 +367,11 @@ data sources, and test procedures belong here or beside the relevant code.
   bar disappears. Status uses a cached
   breath/equipment condition in combat, explicitly labelled cached.
 - Mock coverage: ownership, required level, all timer slots, non-breath timers,
-  equipment changes, toggle, no secure action, mount/death suppression, and
+  equipment changes, no secure action, mount/death suppression, and
   combat scan/mutation guards. Actual event delivery and inventory API behavior
   still need Forever validation: /reload with Hydrocane in bags, submerge until
   the breath bar appears, equip/unequip it, surface until the bar disappears,
-  and check /buffed hydrocane plus combat transitions. The icon must not equip
+  and check combat transitions. The icon must not equip
   anything on click. Report /buffed status if it fails to refresh.
 
 ### Cozy Sleeping Bag reminder
@@ -394,8 +390,8 @@ data sources, and test procedures belong here or beside the relevant code.
 - Uses existing out-of-combat aura and secure item-button paths. Actual unrolling
   via this button still needs an in-game test. Carry the bag without Well-Rested,
   click to unroll, and rest until one stack appears: the icon should disappear.
-  Remove Well-Rested to restore it; remove the bag to hide it. Check the
-  `/buffed sleepingbag` toggle and confirm normal combat suppression.
+  Remove Well-Rested to restore it; remove the bag to hide it. Confirm normal
+  combat suppression.
 
 ### Druid Mark of the Wild reminder
 
@@ -412,11 +408,11 @@ data sources, and test procedures belong here or beside the relevant code.
 - Uses existing learned-spell, self-cast, out-of-combat paths; Gift also satisfies
   the reminder. The button always casts Mark. XP food selection is unchanged.
 - Mock coverage: learned/unlearned Mark, self-target attributes, all nine IDs,
-  name fallback, unknown-ID rejection, toggle, food availability/XP detection,
+  name fallback, unknown-ID rejection, food availability/XP detection,
   class isolation, cached combat diagnostics, mount/death suppression.
 - Actual Forever druid casting/API behavior remains unverified. In-game:
   `/reload`, remove Mark, click with another unit targeted, confirm self-cast
-  and icon disappearance. Check Gift, food from bags, toggles, combat/mount/death
+  and icon disappearance. Check Gift, food from bags, combat/mount/death
   suppression. Share out-of-combat `/buffed status` if detection fails.
 
 ### Skyborne Skysight reminder
@@ -434,13 +430,13 @@ data sources, and test procedures belong here or beside the relevant code.
 - Reuses the verified out-of-combat C_Spell.GetSpellCooldown fields and secure
   self-cast path. SPELL_UPDATE_COOLDOWN is now registered for all classes.
   No combat reads or polling. Mock tests cover unlearned/learned, cooldown
-  expiry, missing/disabled data, self-target attributes, toggle, mount/death,
+  expiry, missing/disabled data, self-target attributes, mount/death,
   combat scan/mutation guards and class isolation.
 - Actual Forever racial spellbook/casting behavior and cooldown expiry event
   delivery remain unverified. On a Skyborne character: /reload, check the ready
   icon, click with another unit targeted, and confirm hiding after casting and
-  automatic return after two minutes without moving. Check /buffed skysight,
-  mount/dismount and combat transitions; share /buffed status if it fails.
+  automatic return after two minutes without moving. Check mount/dismount and
+  combat transitions; share /buffed status if it fails.
 
 ### Druid Nature's Grasp reminder
 
@@ -458,10 +454,10 @@ data sources, and test procedures belong here or beside the relevant code.
 - Event-driven refresh on SPELL_UPDATE_COOLDOWN (druids only); no polling.
   Actual Forever event delivery at cooldown expiry remains unverified.
 - Mock coverage includes learning, cooldown/expiry/disabled/unavailable states,
-  all six aura IDs, name fallback, unknown-ID rejection, toggle, class isolation,
+  all six aura IDs, name fallback, unknown-ID rejection, class isolation,
   and combat scan suppression. In-game: `/reload`, click with another target,
   confirm hiding after casting and automatic return at cooldown expiry without
-  moving. Test `/buffed grasp`, mount/death/combat transitions, and share status
+  moving. Test mount/death/combat transitions, and share status
   if it fails.
 
 ### Druid Thorns reminder
@@ -474,11 +470,11 @@ data sources, and test procedures belong here or beside the relevant code.
   6/14/24/34/44/54, ten-minute buff, and 3/6/9/12/15/18 Nature damage to
   attackers when hit. No other ranks or interactions inferred.
 - Mock tests cover learned/unlearned availability, self-target attributes,
-  all six aura IDs, name fallback, unknown-ID rejection, toggle, druid scope,
+  all six aura IDs, name fallback, unknown-ID rejection, druid scope,
   combat scan suppression and mount/death hiding.
 - In-game validation pending: `/reload`, remove Thorns, click its reminder
   with another unit targeted; confirm self-cast and disappearance. Check
-  `/buffed thorns` and combat/mount/death suppression. If detection fails,
+  combat/mount/death suppression. If detection fails,
   share out-of-combat `/buffed status`.
 
 ### Divine Spirit reminder
@@ -495,10 +491,10 @@ data sources, and test procedures belong here or beside the relevant code.
   for one hour. Prayer of Spirit requires level 60 and grants 40 Spirit for
   one hour. No additional ranks or stacking rules are inferred.
 - Mock coverage includes learning, self-target attributes, each verified aura ID,
-  name fallback, unknown-ID rejection, and `/buffed spirit` toggling.
+  name fallback, and unknown-ID rejection.
 - In-game validation remains pending: `/reload`, remove Divine Spirit, click its
   reminder with another unit targeted, and confirm it buffs yourself and hides.
-  Verify the toggle and normal combat/mount/death suppression. Share an
+  Verify normal combat/mount/death suppression. Share an
   out-of-combat `/buffed status` if the applied aura is not recognized.
 
 ### Verified aura IDs
@@ -661,7 +657,9 @@ spellbook, or secure-click behavior. Validate these in the client:
    Repeat with movement and aura/bag/spell events; no secret-aura errors should
    occur.
 5. Mount/dismount and die/resurrect: reminders should hide and return.
-6. Move the bar and toggle a reminder, then `/reload`: settings should persist.
+6. Move and lock the bar, then `/reload`: the position and lock should persist.
+   Old per-reminder toggle settings are discarded; reminders use only their
+   eligibility and visibility checks.
 7. Carry supported usable XP food without its XP buff: the icon should appear.
    Eat for at least 10 seconds: it should disappear once the XP buff appears.
    Plain Well Fed must not hide it. Removing the last supported usable food
@@ -673,15 +671,24 @@ spellbook, or secure-click behavior. Validate these in the client:
 
 ## Validation and workflow
 
-Runtime files are `Buffed.toc` and `Buffed.lua`. Mock tests are in
-`tests/smoke.lua`; they are not loaded by the game.
+`Buffed.toc` defines runtime file order. The Lua files share WoW's private
+addon table. The core owns runtime state and calls the condition checks out of
+combat.
+
+- `Reminders.lua`: ordered reminder definitions and class eligibility.
+- `Items.lua`: supported items and required character levels.
+- `Conditions.lua`: Fishing lure and Hydrocane checks.
+- `Buffed.lua`: event handling, reminder evaluation, secure UI, and status.
+
+`tests/smoke.lua` loads the runtime Lua files in TOC order. It is not loaded by
+the game.
 
 Run from the addon folder:
 
 ```bash
 lua tests/smoke.lua
 # Alternative when no Lua interpreter is installed:
-npx --yes --package fengari-node-cli fengari tests/smoke.lua
+npx --yes --package fengari-node-cli fengari tests/smoke.lua $(grep -vE '^[[:space:]]*(#|$)' Buffed.toc | tr -d '\r')
 
 git diff --check
 ```
@@ -705,8 +712,8 @@ if a release already exists, creation fails rather than overwriting it. Run a
 new workflow to publish another release. Keep this workflow's identity stable
 so its run numbering continues.
 
-The ZIP contains a top-level `Buffed/` folder with only `Buffed.toc`, `Buffed.lua`,
-and `README.md`; developer files are excluded. Packaging uses Python's standard
+The ZIP contains a top-level `Buffed/` folder with `Buffed.toc`, the runtime
+files listed in it, and `README.md`; developer files are excluded. Packaging uses Python's standard
 library on the GitHub runner. The repository needs Actions enabled and
 `contents: write` access. The manual workflow must be present on the default
 branch before GitHub offers its Run workflow button.

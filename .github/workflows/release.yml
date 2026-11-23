@@ -30,10 +30,14 @@ jobs:
           )
           if count != 1:
               raise SystemExit("Expected exactly one Version field in Buffed.toc")
+          runtime_files = [
+              line for line in (line.strip() for line in toc.splitlines())
+              if line and not line.startswith("#")
+          ]
           Path("dist").mkdir(exist_ok=True)
           with ZipFile(f"dist/Buffed-v{version}.zip", "w", ZIP_DEFLATED) as archive:
               archive.writestr("Buffed/Buffed.toc", toc)
-              for name in ("Buffed.lua", "README.md"):
+              for name in (*runtime_files, "README.md"):
                   archive.write(name, f"Buffed/{name}")
 
       - name: Create GitHub release

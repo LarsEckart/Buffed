@@ -1,63 +1,14 @@
+local _, addon = ...
 local _, class = UnitClass("player")
+local consumables = addon.consumables
+local FishingNeeded, HydrocaneNeeded = addon.FishingNeeded, addon.HydrocaneNeeded
 
--- Aura IDs verified at https://nether.wowhead.com/forever/tooltip/spell/{ID}
--- (each listed rank checked; verification details in AGENTS.md).
--- English names remain for spellbook/casting and aura APIs without spell IDs.
--- Group prayers satisfy the requirement; buttons cast single-target spells.
-local buffs = {
-    -- Umbrella aura only; individual camp benefits are not checked.
-    -- https://nether.wowhead.com/forever/tooltip/spell/1229741
-    { key = "camp", name = "Camp Benefits", auraIDs = { 1229741 }, reminderOnly = true,
-        icon = "Interface\\Icons\\inv_camelot_camping_campbenefits" },
-    { key = "mark", name = "Mark of the Wild", alternate = "Gift of the Wild",
-        auraIDs = { 1126, 5232, 6756, 5234, 8907, 9884, 9885, 21849, 21850 } },
-    { key = "thorns", name = "Thorns", auraIDs = { 467, 782, 1075, 8914, 9756, 9910 } },
-    -- Each rank verified at the Forever spell endpoint; cooldown fields tested in-client.
-    { key = "grasp", name = "Nature's Grasp", cooldown = true,
-        auraIDs = { 16689, 16810, 16811, 16812, 16813, 17329 } },
-    -- https://nether.wowhead.com/forever/tooltip/spell/1259686
-    -- Racial availability is gated by the learned spell, not a race token.
-    -- No resulting aura ID is exposed; this reminder checks cooldown only.
-    { key = "skysight", name = "Skysight", cooldown = true, racial = true,
-        auraIDs = {}, icon = "Interface\\Icons\\ability_skyreach_lens_flare" },
-    { key = "fortitude", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude",
-        auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
-    { key = "spirit", name = "Divine Spirit", alternate = "Prayer of Spirit",
-        auraIDs = { 14752, 14818, 14819, 27841, 27681 } },
-    { key = "fire", name = "Inner Fire", auraIDs = { 588, 7128, 602, 1006, 10951, 10952 } },
-    { key = "shadowguard", name = "Shadowguard", auraIDs = { 18137, 19308, 19309, 19310, 19311, 19312 } },
-    -- Each Well Fed ID's Forever buffspells explicitly includes +5% kill XP.
-    -- Sources: https://nether.wowhead.com/forever/tooltip/spell/{ID}
-    -- Full supported-food audit and mapping limitations: AGENTS.md.
-    { key = "food", name = "Well Fed XP Boost",
-        auraIDs = { 1243969, 1248406, 1248420, 1248421, 1248422, 1248688,
-            1249519, 1249520, 1249521, 1249523 },
-        item = true, icon = "Interface\\Icons\\INV_Misc_Food_18" },
-    -- Client-observed; verified: https://nether.wowhead.com/forever/tooltip/spell/429959
-    { key = "sleepingbag", name = "Well-Rested", auraIDs = { 429959 },
-        item = true, icon = "Interface\\Icons\\INV_Misc_Bag_BigBagofEnchantments" },
-    -- Informational only: no automatic equipment changes or click action.
-    -- https://nether.wowhead.com/forever/tooltip/item/9452
-    { key = "hydrocane", name = "Hydrocane", gear = true, reminderOnly = true,
-        icon = "Interface\\Icons\\INV_Staff_15" },
-    { key = "fishing", name = "Fishing lure", supplies = true, reminderOnly = true,
-        icon = "Interface\\Icons\\INV_Misc_Gem_Variety_02" },
-    { key = "intellect", name = "Intellect", item = true, alternate = "Arcane Intellect", other = "Arcane Brilliance",
-        auraIDs = { 8096, 8097, 8098, 12176, 1459, 1460, 1461, 10156, 10157, 23028 } },
-}
-
--- Items, informational reminders and learned racials are shared across classes.
-local spellClasses = {
-    mark = "DRUID", thorns = "DRUID", grasp = "DRUID",
-    fortitude = "PRIEST", spirit = "PRIEST", fire = "PRIEST", shadowguard = "PRIEST",
-}
-local classBuffs = {}
-for _, buff in ipairs(buffs) do
-    if buff.item or buff.reminderOnly or buff.racial or spellClasses[buff.key] == class then
-        classBuffs[#classBuffs + 1] = buff
+local buffs = {}
+for _, buff in ipairs(addon.reminders) do
+    if not buff.class or buff.class == class then
+        buffs[#buffs + 1] = buff
     end
 end
-buffs = classBuffs
 
 local events = CreateFrame("Frame")
 local anchor, initialized
@@ -174,120 +125,6 @@ local function ActiveBuffs()
     return active, details
 end
 
--- IDs avoid depending on cached item-name data. List order breaks equal-level ties.
--- Food entries explicitly list +5% kill XP in Wowhead Forever's tooltip:
--- https://nether.wowhead.com/forever/tooltip/item/<id>
--- Prefer the highest usable required character level; stat bonuses are not ranked.
--- This is a verified allowlist, not an exhaustive list of Forever foods.
-local consumables = {
-    -- Verified individually: https://nether.wowhead.com/forever/tooltip/item/{ID}
-    -- Ownership only; fishing skill is not checked. Informational, not clickable.
-    fishing = {
-        { id = 6532, level = 1, name = "Bright Baubles" },
-        { id = 6529, level = 1, name = "Shiny Bauble" },
-        { id = 6530, level = 1, name = "Nightcrawlers" },
-        { id = 6533, level = 1, name = "Aquadynamic Fish Attractor" },
-        { id = 6811, level = 1, name = "Aquadynamic Fish Lens" },
-        { id = 7307, level = 1, name = "Flesh Eating Worm" },
-    },
-    -- Required character level, not the linked effect's spell level.
-    -- https://nether.wowhead.com/forever/tooltip/item/9452
-    hydrocane = { { id = 9452, level = 27, name = "Hydrocane" } },
-    -- No character-level requirement listed (item level 40 is not a use level).
-    -- https://nether.wowhead.com/forever/tooltip/item/211527
-    -- https://nether.wowhead.com/forever/tooltip/spell/429961
-    sleepingbag = {
-        { id = 211527, level = 1, name = "Cozy Sleeping Bag" },
-    },
-    food = {
-        { id = 2681, level = 1, name = "Roasted Boar Meat" },
-        { id = 2680, level = 1, name = "Spiced Wolf Meat" },
-        { id = 2682, level = 1, name = "Cooked Crab Claw" },
-        { id = 5472, level = 1, name = "Kaldorei Spider Kabob" },
-        { id = 5474, level = 1, name = "Roasted Kodo Meat" },
-        { id = 5477, level = 1, name = "Strider Stew" },
-        { id = 3663, level = 1, name = "Murloc Fin Soup" },
-        { id = 6290, level = 1, name = "Brilliant Smallfish" },
-        -- https://nether.wowhead.com/forever/tooltip/item/787
-        { id = 787, level = 1, name = "Slitherskin Mackerel" },
-        { id = 6888, level = 1, name = "Herb Baked Egg" },
-        { id = 6890, level = 1, name = "Smoked Bear Meat" },
-        -- https://nether.wowhead.com/forever/tooltip/item/249865
-        { id = 249865, level = 1, name = "Peace Tea" },
-        { id = 733, level = 5, name = "Westfall Stew" },
-        { id = 2683, level = 5, name = "Crab Cake" },
-        { id = 2684, level = 5, name = "Coyote Steak" },
-        { id = 2687, level = 5, name = "Dry Pork Ribs" },
-        { id = 3220, level = 5, name = "Blood Sausage" },
-        { id = 3662, level = 5, name = "Crocolisk Steak" },
-        { id = 3726, level = 5, name = "Big Bear Steak" },
-        { id = 4592, level = 5, name = "Longjaw Mud Snapper" },
-        { id = 5095, level = 5, name = "Rainbow Fin Albacore" },
-        { id = 5476, level = 5, name = "Fillet of Frenzy" },
-        { id = 6316, level = 5, name = "Loch Frenzy Delight" },
-        { id = 12213, level = 5, name = "Carrion Surprise" },
-        -- https://nether.wowhead.com/forever/tooltip/item/250077
-        { id = 250077, level = 5, name = "Twice-Spiced Raptor Slice" },
-        -- https://nether.wowhead.com/forever/tooltip/item/249866
-        { id = 249866, level = 5, name = "Royal Tea" },
-        { id = 21072, level = 10, name = "Smoked Sagefish" },
-        { id = 1017, level = 15, name = "Seasoned Wolf Kabob" },
-        { id = 2685, level = 15, name = "Succulent Pork Ribs" },
-        { id = 3664, level = 15, name = "Crocolisk Gumbo" },
-        { id = 3665, level = 15, name = "Curiously Tasty Omelet" },
-        { id = 3666, level = 15, name = "Gooey Spider Cake" },
-        { id = 3727, level = 15, name = "Hot Lion Chops" },
-        { id = 3729, level = 15, name = "Soothing Turtle Bisque" },
-        { id = 12209, level = 15, name = "Lean Wolf Steak" },
-        { id = 12210, level = 15, name = "Roast Raptor" },
-        { id = 12214, level = 15, name = "Mystery Stew" },
-        -- https://nether.wowhead.com/forever/tooltip/item/249867
-        { id = 249867, level = 15, name = "Root Tea" },
-        { id = 3728, level = 25, name = "Tasty Lion Steak" },
-        { id = 4457, level = 25, name = "Barbecued Buzzard Wing" },
-        { id = 12215, level = 25, name = "Heavy Kodo Stew" },
-        { id = 12216, level = 25, name = "Spiced Chili Crab" },
-        -- https://nether.wowhead.com/forever/tooltip/item/8364
-        { id = 8364, level = 25, name = "Mithril Head Trout" },
-        -- https://nether.wowhead.com/forever/tooltip/item/274971
-        { id = 274971, level = 25, name = "Briny Seafood Stew" },
-        -- https://nether.wowhead.com/forever/tooltip/item/249868
-        { id = 249868, level = 25, name = "Triage Tea" },
-        -- https://nether.wowhead.com/forever/tooltip/item/21217
-        { id = 21217, level = 30, name = "Sagefish Delight" },
-        { id = 6887, level = 35, name = "Spotted Yellowtail" },
-        { id = 12212, level = 35, name = "Jungle Stew" },
-        { id = 12218, level = 35, name = "Monster Omelet" },
-        { id = 13927, level = 35, name = "Cooked Glossy Mightfish" },
-        { id = 13928, level = 35, name = "Grilled Squid" },
-        { id = 13929, level = 35, name = "Hot Smoked Bass" },
-        { id = 13930, level = 35, name = "Filet of Redgill" },
-        { id = 13931, level = 35, name = "Nightfin Soup" },
-        { id = 13932, level = 35, name = "Poached Sunscale Salmon" },
-        { id = 18045, level = 35, name = "Tender Wolf Steak" },
-        -- XP-bearing drink; same XP reminder and secure item-use path.
-        -- https://nether.wowhead.com/forever/tooltip/item/249869
-        { id = 249869, level = 35, name = "Sunny Tea" },
-        { id = 13933, level = 45, name = "Lobster Stew" },
-        { id = 13934, level = 45, name = "Mightfish Steak" },
-        -- https://nether.wowhead.com/forever/tooltip/item/13935
-        { id = 13935, level = 45, name = "Baked Salmon" },
-        -- https://nether.wowhead.com/forever/tooltip/item/249870
-        { id = 249870, level = 45, name = "Sage's Tea" },
-    },
-    -- Required character levels (not item levels), verified on Wowhead Forever:
-    -- https://www.wowhead.com/forever/item=955
-    -- https://www.wowhead.com/forever/item=2290
-    -- https://www.wowhead.com/forever/item=4419
-    -- https://www.wowhead.com/forever/item=10308
-    intellect = {
-        { id = 10308, level = 50, name = "Scroll of Intellect IV" },
-        { id = 4419, level = 35, name = "Scroll of Intellect III" },
-        { id = 2290, level = 20, name = "Scroll of Intellect II" },
-        { id = 955, level = 5, name = "Scroll of Intellect" },
-    },
-}
-
 local function FindConsumable(buff)
     local slots = C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots
     local itemID = C_Container and C_Container.GetContainerItemID or GetContainerItemID
@@ -313,29 +150,6 @@ end
 local function ItemTexture(id, fallback)
     local icon = C_Item and C_Item.GetItemIconByID or GetItemIcon
     return (icon and icon(id)) or fallback or "Interface\\Icons\\INV_Scroll_01"
-end
-
-local function FishingNeeded()
-    -- User verified false without a lure, true with one (enchant ID 265).
-    -- Any temporary main-hand enchant suppresses this reminder.
-    if not GetInventoryItemID or not GetWeaponEnchantInfo then return nil end
-    if GetInventoryItemID("player", 16) ~= 6256 then return false end
-    local enchanted = GetWeaponEnchantInfo()
-    if enchanted == nil then return nil end
-    return not enchanted
-end
-
-local function HydrocaneNeeded()
-    -- User verified BREATH while underwater, UNKNOWN after the bar disappears.
-    -- IsSubmerged/IsSwimming both stayed true at the surface in this client.
-    -- Only called out of combat; no timer values or aura data are inspected.
-    if not GetMirrorTimerInfo or not GetInventoryItemID then return false end
-    if GetInventoryItemID("player", 16) == 9452 then return false end
-    for index = 1, 3 do
-        local timer = GetMirrorTimerInfo(index)
-        if timer == "BREATH" then return true end
-    end
-    return false
 end
 
 local function CooldownReady(buff, available)
@@ -401,7 +215,7 @@ local function Refresh()
         elseif buff.racial then needed = true -- cooldown-ready reminder, no aura mapping assumed
         else needed = not HasBuff(active, buff) end
         local ready = not buff.cooldown or CooldownReady(buff, available)
-        local missing = BuffedDB.enabled[buff.key] and (available or buff.supplies) and needed and ready
+        local missing = (available or buff.supplies) and needed and ready
         local dungeonSuppressed = inDungeon and (buff.key == "camp" or buff.key == "sleepingbag")
         if missing and not dungeonSuppressed and not (buff.key == "food" and moving) then
             button:ClearAllPoints()
@@ -425,12 +239,7 @@ local function Initialize()
     if initialized then return end
     if CombatLocked() then return end
     if type(BuffedDB) ~= "table" then BuffedDB = {} end
-    if type(BuffedDB.enabled) ~= "table" then BuffedDB.enabled = {} end
-    for _, buff in ipairs(buffs) do
-        if BuffedDB.enabled[buff.key] == nil then
-            BuffedDB.enabled[buff.key] = true
-        end
-    end
+    BuffedDB.enabled = nil -- Retire legacy reminder toggles; keep bar settings.
 
     anchor = CreateFrame("Frame", "BuffedAnchor", UIParent, "SecureHandlerStateTemplate")
     anchor:SetSize(#buffs * 42 - 4, 20)
@@ -546,9 +355,6 @@ local function HandleCommand(message)
     local command = message:lower():match("^%s*(.-)%s*$")
     if command == "" or command == "help" then
         Print("/buffed unlock | lock | reset | status")
-        local keys = {}
-        for _, buff in ipairs(buffs) do keys[#keys + 1] = buff.key end
-        Print("Toggle a reminder: /buffed " .. table.concat(keys, " | "))
         return
     end
     if command == "status" then
@@ -586,12 +392,12 @@ local function HandleCommand(message)
                     or ready and ", cooldown ready" or ", cooldown not ready"
                 if CombatLocked() then cooldownState = cooldownState .. " (cached, not live)" end
             end
-            AddLine(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off")
-                .. (available == nil and ", availability/learned state unknown"
-                    or (buff.supplies and (available and ", lure in bags (skill not checked)" or ", no supported lure in bags")
-                        or (buff.item or buff.gear) and (available and ", usable item in bags" or ", no supported usable item")
-                        or buff.reminderOnly and ", reminder only"
-                        or (available and ", learned" or ", not learned")))
+            AddLine(buff.name .. ": "
+                .. (available == nil and "availability/learned state unknown"
+                    or (buff.supplies and (available and "lure in bags (skill not checked)" or "no supported lure in bags")
+                        or (buff.item or buff.gear) and (available and "usable item in bags" or "no supported usable item")
+                        or buff.reminderOnly and "reminder only"
+                        or (available and "learned" or "not learned")))
                 .. (buff.supplies and (cachedFishingNeeded == nil and ", pole/enchant state unknown"
                         or cachedFishingNeeded and ", pole equipped without temporary enchant" or ", not needed")
                     or buff.gear and (cachedHydrocaneNeeded == nil and ", breath/equipment state unknown"
@@ -610,26 +416,19 @@ local function HandleCommand(message)
         ShowStatus(lines)
         return
     end
+    if command ~= "unlock" and command ~= "lock" and command ~= "reset" then
+        Print("Unknown command. Use /buffed help.")
+        return
+    end
     if CombatLocked() then
         Print("Settings cannot be changed during combat.")
         return
     end
-    if command == "unlock" or command == "lock" then
-        BuffedDB.unlocked = command == "unlock"
-    elseif command == "reset" then
+    if command == "reset" then
         BuffedDB.position = nil
         RestorePosition()
     else
-        local found = false
-        for _, buff in ipairs(buffs) do
-            if command == buff.key then
-                BuffedDB.enabled[buff.key] = not BuffedDB.enabled[buff.key]
-                Print(buff.name .. ": " .. (BuffedDB.enabled[buff.key] and "on" or "off"))
-                found = true
-                break
-            end
-        end
-        if not found then Print("Unknown command. Use /buffed help.") end
+        BuffedDB.unlocked = command == "unlock"
     end
     Refresh()
 end
