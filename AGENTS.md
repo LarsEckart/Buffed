@@ -377,8 +377,15 @@ data sources, and test procedures belong here or beside the relevant code.
 ### Cozy Sleeping Bag reminder
 
 - `sleepingbag` uses carried item 211527 (Cozy Sleeping Bag) and aura 429959
-  (Well-Rested), observed by the user at one stack. Any stack hides the reminder;
-  stack counts, cooldowns, and progress toward three stacks are not tracked.
+  (Well-Rested), observed by the user at one stack. The reminder shows when
+  Well-Rested is missing or has strictly less than 15 minutes left, regardless
+  of stacks. Cooldowns and progress toward three stacks are not tracked.
+- The user verified out-of-combat `aura.expirationTime - GetTime()` (4361
+  seconds remaining). A cancellable one-shot `C_Timer.NewTimer` refreshes just
+  past the threshold; no polling or combat aura reads. If the expiration is
+  unavailable, an active buff still hides the reminder. In-game timer delivery
+  needs validation: stand idle as Well-Rested crosses 15 minutes and confirm
+  the bag icon appears.
 - Verified Forever sources:
   https://nether.wowhead.com/forever/tooltip/item/211527
   https://nether.wowhead.com/forever/tooltip/spell/429961
@@ -389,7 +396,8 @@ data sources, and test procedures belong here or beside the relevant code.
   stacks. Well-Rested lists +1% experience gains and a two-hour duration.
 - Uses existing out-of-combat aura and secure item-button paths. Actual unrolling
   via this button still needs an in-game test. Carry the bag without Well-Rested,
-  click to unroll, and rest until one stack appears: the icon should disappear.
+  click to unroll, and rest until a stack with at least 15 minutes left appears:
+  the icon should disappear.
   Remove Well-Rested to restore it; remove the bag to hide it. Confirm normal
   combat suppression.
 

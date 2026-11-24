@@ -28,6 +28,8 @@ local cachedCooldownReady = {}
 local cachedFishingNeeded
 local cachedHydrocaneNeeded
 local CreateStatusWindow
+local sleepingBagTimer
+local sleepingBagWarning = 15 * 60
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cffaad8ffBuffed:|r " .. message)
@@ -103,12 +105,20 @@ local function ActiveBuffs()
     -- aura API then; diagnostics may only use the last out-of-combat snapshot.
     if CombatLocked() then return cachedActive, cachedDetails end
     local active, details = {}, {}
+    local wellRestedExpiration
     for i = 1, 255 do
         local name, spellID
         if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
             local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
             name = aura and aura.name
             spellID = aura and aura.spellId
+            if spellID == 429959 or (not spellID and name == "Well-Rested") then
+                local expiration = aura.expirationTime
+                if not (issecretvalue and issecretvalue(expiration))
+                    and type(expiration) == "number" and expiration > 0 then
+                    wellRestedExpiration = expiration
+                end
+            end
         elseif UnitBuff then
             local aura = { UnitBuff("player", i) }
             name, spellID = aura[1], aura[10]
@@ -122,7 +132,7 @@ local function ActiveBuffs()
     end
     cachedActive, cachedDetails = active, details
     hasAuraSnapshot = true
-    return active, details
+    return active, details, wellRestedExpiration
 end
 
 local function FindConsumable(buff)
@@ -184,13 +194,17 @@ local function Refresh()
     -- Never mutate secure buttons in combat. Their parent is hidden by a
     -- secure state driver, then we rebuild once combat ends.
     if not initialized or CombatLocked() then return end
+    if sleepingBagTimer then
+        sleepingBagTimer:Cancel()
+        sleepingBagTimer = nil
+    end
     if UnitIsDeadOrGhost("player") or IsMounted() then
         for _, button in ipairs(buttons) do button:Hide() end
         anchor.label:SetShown(BuffedDB.unlocked)
         anchor:EnableMouse(BuffedDB.unlocked)
         return
     end
-    local active = ActiveBuffs()
+    local active, _, wellRestedExpiration = ActiveBuffs()
     cachedHydrocaneNeeded = HydrocaneNeeded()
     cachedFishingNeeded = FishingNeeded()
     -- User verified IsInInstance() returns true, "party" inside a Forever dungeon.
@@ -215,8 +229,20 @@ local function Refresh()
         elseif buff.racial then needed = true -- cooldown-ready reminder, no aura mapping assumed
         else needed = not HasBuff(active, buff) end
         local ready = not buff.cooldown or CooldownReady(buff, available)
-        local missing = (available or buff.supplies) and needed and ready
         local dungeonSuppressed = inDungeon and (buff.key == "camp" or buff.key == "sleepingbag")
+        if buff.key == "sleepingbag" and available and not dungeonSuppressed and wellRestedExpiration then
+            local untilWarning = wellRestedExpiration - GetTime() - sleepingBagWarning
+            if untilWarning < 0 then
+                needed = true
+            elseif C_Timer and C_Timer.NewTimer then
+                -- Refresh once just past the strict threshold, even when idle.
+                sleepingBagTimer = C_Timer.NewTimer(untilWarning + 0.01, function()
+                    sleepingBagTimer = nil
+                    RunSafely("Well-Rested warning", Refresh)
+                end)
+            end
+        end
+        local missing = (available or buff.supplies) and needed and ready
         if missing and not dungeonSuppressed and not (buff.key == "food" and moving) then
             button:ClearAllPoints()
             button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", visible * 42, -4)
@@ -290,7 +316,7 @@ local function Initialize()
             elseif buff.key == "food" then
                 GameTooltip:AddLine("Click to eat. Remain seated for at least 10 seconds for +5% kill XP.", 1, 1, 1)
             elseif buff.key == "sleepingbag" then
-                GameTooltip:AddLine("Click to unroll. Rest inside for at least one minute to gain Well-Rested.", 1, 1, 1)
+                GameTooltip:AddLine("Well-Rested is missing or has less than 15 minutes left. Click to unroll, then rest inside for at least one minute.", 1, 1, 1)
             elseif buff.item then
                 GameTooltip:AddLine("Missing Intellect. Click to use this scroll on yourself.", 1, 1, 1)
             else

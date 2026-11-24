@@ -53,9 +53,9 @@ only when learned and missing; click to cast on yourself.
   Supports Shiny Bauble, Nightcrawlers, Bright Baubles, Aquadynamic Fish
   Attractor/Lens, and Flesh Eating Worm. Not clickable; Fishing skill is not
   checked. A handy reminder to switch back to your staff!
-- **Cozy Sleeping Bag** — appears when you carry the bag and lack Well-Rested.
-  Click to unroll, then rest inside for at least one minute. Any stack of
-  Well-Rested hides the reminder.
+- **Cozy Sleeping Bag** — appears when you carry the bag and Well-Rested is
+  missing or has less than 15 minutes left. Click to unroll, then rest inside
+  for at least one minute.
 
 Reminders hide during combat, while mounted, or while dead, and refresh when
 these states end. Camp Benefits and Cozy Sleeping Bag also hide inside dungeons.

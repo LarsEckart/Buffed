@@ -457,7 +457,19 @@ mainHand, bags[0] = nil, {}
 event("PLAYER_EQUIPMENT_CHANGED")
 assert(not fishing.shown)
 
--- Sleeping bag ownership and any Well-Rested stack use the normal item path.
+-- Sleeping bag ownership and the Well-Rested renewal window use the normal item path.
+local bagTimer
+C_Timer = { NewTimer = function(delay, callback)
+    assert(not bagTimer or bagTimer.cancelled or bagTimer.fired, "only one warning timer at a time")
+    bagTimer = { deadline = now + delay, callback = callback,
+        Cancel = function(self) self.cancelled = true end }
+    return bagTimer
+end }
+local function fireBagTimer()
+    assert(not bagTimer.cancelled and not bagTimer.fired)
+    now, bagTimer.fired = bagTimer.deadline, true
+    bagTimer.callback()
+end
 bags[0] = { 211527 }
 event("BAG_UPDATE_DELAYED")
 local sleepingbag
@@ -469,9 +481,32 @@ assert(sleepingbag.icon.SetTextureArgs[1] == 311527)
 for _, stacks in ipairs({ 1, 2, 3 }) do
     active = { { name = "Well-Rested", spellId = 429959, applications = stacks } }
     event("UNIT_AURA", "player")
-    assert(not sleepingbag.shown, "any Well-Rested stack should hide the bag")
+    assert(not sleepingbag.shown and not bagTimer, "a recognized buff with no expiration hides the bag")
 end
-active = { { name = "Well-Rested", spellId = 1 } }
+local timeBeforeBagTest = now
+active = { { name = "Well-Rested", spellId = 429959, expirationTime = now + 901 } }
+event("UNIT_AURA", "player")
+assert(not sleepingbag.shown and bagTimer.deadline > now + 1)
+now = now + 1
+event("UNIT_AURA", "player")
+assert(not sleepingbag.shown, "exactly 15 minutes is not yet in the warning window")
+fireBagTimer()
+assert(sleepingbag.shown, "the timer should show the icon without another event")
+active[1].expirationTime = now + 1000
+event("UNIT_AURA", "player")
+local oldBagTimer = bagTimer
+active[1].expirationTime = now + 2000
+event("UNIT_AURA", "player")
+assert(not sleepingbag.shown and oldBagTimer.cancelled and bagTimer.deadline > now + 1100)
+event("PLAYER_REGEN_DISABLED")
+local scansBeforeBagTimer, mutationsBeforeBagTimer = scans, mutations
+fireBagTimer()
+assert(scans == scansBeforeBagTimer and mutations == mutationsBeforeBagTimer,
+    "the warning must not scan or mutate secure frames in combat")
+event("PLAYER_REGEN_ENABLED")
+assert(sleepingbag.shown, "refresh the warning after combat")
+now = timeBeforeBagTest
+active = { { name = "Well-Rested", spellId = 1, expirationTime = now + 899 } }
 event("UNIT_AURA", "player")
 assert(sleepingbag.shown, "unknown Well-Rested IDs must not match by name")
 active = { "Well-Rested" }
