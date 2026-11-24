@@ -338,6 +338,21 @@ data sources, and test procedures belong here or beside the relevant code.
   pole, enchant applied/removed with and without carried lures,
   no click action, and combat inventory/status scan and mutation guards.
 
+### Rogue weapon poison reminder
+
+- Rogue-only, with no per-reminder toggle. Selects the highest required-level
+  carried poison (allowlist order breaks ties). All 20 items in
+  `Items.lua` were checked at
+  https://nether.wowhead.com/forever/tooltip/item/{ID} for their English names,
+  required character levels, Rogue restriction, and 30-minute weapon coating.
+- Checks equipped hand slots 16 and 17 and only treats an explicit false
+  enchant flag as missing. Does not classify equipped items or enchant IDs,
+  overwrite temporary enchants, or inspect combat state beyond the normal guard.
+- In-game validation pending: with both weapons unenchanted and poison in
+  bags, verify the secure macro applies to main hand, then off hand on a second
+  click after application. Confirm the icon updates without movement and returns
+  after expiration. Mocks check macro attributes, not client macro execution.
+
 ### Hydrocane reminder
 
 - Informational-only `hydrocane` reminder for all classes; no equip action,

@@ -21,6 +21,8 @@ addon.reminders = {
     -- No resulting aura ID is exposed; this reminder checks cooldown only.
     { key = "skysight", name = "Skysight", cooldown = true, racial = true,
         auraIDs = {}, icon = "Interface\\Icons\\ability_skyreach_lens_flare" },
+    { key = "poison", class = "ROGUE", name = "Weapon Poison", poison = true, item = true,
+        icon = "Interface\\Icons\\ability_rogue_dualweild" },
     { key = "fortitude", class = "PRIEST", name = "Power Word: Fortitude", alternate = "Prayer of Fortitude",
         auraIDs = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 } },
     { key = "spirit", class = "PRIEST", name = "Divine Spirit", alternate = "Prayer of Spirit",
